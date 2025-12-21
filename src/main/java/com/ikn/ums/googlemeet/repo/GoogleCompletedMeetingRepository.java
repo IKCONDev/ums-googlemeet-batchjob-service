@@ -1,5 +1,7 @@
 package com.ikn.ums.googlemeet.repo;
 
+import java.util.Optional;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -20,5 +22,8 @@ public interface GoogleCompletedMeetingRepository extends JpaRepository<GoogleCo
     
  // NEW: check if a Google event already exists
     boolean existsBygoogleEventId(String googleEventId);
+    
+    Optional<GoogleCompletedMeeting> findByGoogleEventId(String googleEventId);
+
 
 }

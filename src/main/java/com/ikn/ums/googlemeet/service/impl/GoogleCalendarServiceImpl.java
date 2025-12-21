@@ -1,17 +1,11 @@
 package com.ikn.ums.googlemeet.service.impl;
-
+ 
 import java.io.IOException;
-import java.net.ConnectException;
-import java.net.SocketTimeoutException;
-import java.net.UnknownHostException;
 import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
-
-import javax.net.ssl.SSLHandshakeException;
-
+ 
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -21,26 +15,52 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.retry.annotation.Backoff;
-import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
+import com.ikn.ums.googlemeet.dto.ConferenceRecordDto;
 import com.ikn.ums.googlemeet.dto.GoogleCompletedMeetingDto;
+import com.ikn.ums.googlemeet.dto.GoogleCompletedMeetingParticipantDto;
+import com.ikn.ums.googlemeet.dto.GoogleMeetingDetailsDto;
+import com.ikn.ums.googlemeet.dto.GoogleRecurringMeetingDetailsDto;
 import com.ikn.ums.googlemeet.dto.GoogleScheduledMeetingDto;
+import com.ikn.ums.googlemeet.dto.TranscriptDto;
 import com.ikn.ums.googlemeet.model.AccessTokenResponseModel;
+import com.ikn.ums.googlemeet.model.GoogleCompletedMeetingParticipantsResponse;
 import com.ikn.ums.googlemeet.model.GoogleCompletedMeetingResponse;
+import com.ikn.ums.googlemeet.model.GoogleConferenceRecordsResponse;
 import com.ikn.ums.googlemeet.model.GoogleScheduledMeetingResponse;
+import com.ikn.ums.googlemeet.model.TranscriptResponse;
 import com.ikn.ums.googlemeet.service.GoogleCalendarService;
 import com.ikn.ums.googlemeet.utils.GoogleUrlFactory;
 import com.ikn.ums.googlemeet.utils.InitializeGoogleOAuth;
-
+ 
 import lombok.extern.slf4j.Slf4j;
-
-@Slf4j
+ 
+ 
+/**
+* Google Calendar service impl
+*
+* This service is responsible for all outbound communication with
+* Google APIs such as:
+*   - Fetch scheduled meetings
+*   - Fetch completed meetings
+*   - Fetch meeting invitees
+*   - Fetch meeting details
+*
+* Responsibilities:
+*   - Build Google API URLs dynamically
+*   - Authenticate using Google OAuth access token
+*   - Execute RestTemplate calls
+*   - Handle 429 rate limits (Retry-After logic)
+*   - Apply Spring Retry for network failures
+*   - Fail safely and return empty lists instead of throwing errors
+*/
+ 
 @Service
+@Slf4j
 public class GoogleCalendarServiceImpl implements GoogleCalendarService {
 
     private static final int MAX_API_RETRIES = 3;
@@ -58,184 +78,222 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
     @Autowired
     private ModelMapper modelMapper;
 
-
-    // ---------------------------
-    // GET ACCESS TOKEN
-    // ---------------------------
+    
     @Override
     public AccessTokenResponseModel getAccessToken() {
-        String method = "getAccessToken()";
-        log.info("{} - Getting Google Access Token", method);
-
-        AccessTokenResponseModel token = googleOAuth.getAccessToken();
-        if (token == null) {
-            log.error("{} - FAILED: NULL Google access token", method);
-        }
-        return token;
+        return googleOAuth.getAccessToken();
     }
 
-
-    // ---------------------------
-    // FETCH SCHEDULED MEETINGS
-    // ---------------------------
-    @Override
-    @Retryable(
-        retryFor = {ResourceAccessException.class, IOException.class},
-        maxAttempts = MAX_API_RETRIES,
-        backoff = @Backoff(delay = 3000, multiplier = 1)
-    )
-    public List<GoogleScheduledMeetingDto> fetchScheduledMeetings(String userId) {
-        return fetchScheduledMeetings(userId, 2);
-    }
-
-    private List<GoogleScheduledMeetingDto> fetchScheduledMeetings(String userId, int attempt) {
-        String method = "fetchScheduledMeetings()";
-        log.info("{} - Attempt {} for {}", method, attempt, userId);
-
-        if (attempt > MAX_API_RETRIES) return Collections.emptyList();
-
-        try {
-            AccessTokenResponseModel token = getAccessToken();
-            if (token == null) return Collections.emptyList();
-
-            String url = googleUrlFactory.buildUpcomingMeetingsUrl(userId); // Make sure signature matches
-            HttpEntity<Void> entity = new HttpEntity<>(getHeaders());
-
-            ResponseEntity<GoogleScheduledMeetingResponse> response =
-                    restTemplate.exchange(url, HttpMethod.GET, entity, GoogleScheduledMeetingResponse.class);
-
-            if (response.getBody() == null || response.getBody().getMeetings() == null)
-                return Collections.emptyList();
-
-            return response.getBody().getMeetings();
-
-        } catch (HttpClientErrorException.TooManyRequests ex) {
-            int wait = Optional.ofNullable(ex.getResponseHeaders().getFirst("Retry-After"))
-                    .map(Integer::parseInt)
-                    .orElse(10);
-            try { Thread.sleep(wait * 1000L);} catch (Exception ignored) {}
-            return fetchScheduledMeetings(userId, attempt + 1);
-
-        } catch (Exception ex) {
-            log.error("{} - ERROR: {}", method, ex.getMessage());
-            return Collections.emptyList();
-        }
-    }
-
-
-    // ---------------------------
-    // FETCH COMPLETED MEETINGS
-    // ---------------------------
-    @Override
-    @Retryable(
-        retryFor = {ResourceAccessException.class, IOException.class},
-        maxAttempts = MAX_API_RETRIES,
-        backoff = @Backoff(delay = 3000, multiplier = 2)
-    )
-    public List<GoogleCompletedMeetingDto> fetchCompletedMeetings(String userId) {
-        return fetchCompletedMeetings(userId, 1);
-    }
-
-    private List<GoogleCompletedMeetingDto> fetchCompletedMeetings(String userId, int attempt) {
-        String method = "fetchCompletedMeetings()";
-        log.info("{} - Attempt {} for {}", method, attempt, userId);
-
-        if (attempt > MAX_API_RETRIES) return Collections.emptyList();
-
-        try {
-            AccessTokenResponseModel token = getAccessToken();
-            if (token == null) return Collections.emptyList();
-
-            LocalDate date = LocalDate.now().minusDays(2);
-            String url = googleUrlFactory.buildCompletedMeetingsUrl(userId, date); // Implement this method in URL factory
-            HttpEntity<Void> entity = new HttpEntity<>(getHeaders());
-
-            ResponseEntity<GoogleCompletedMeetingResponse> response =
-                    restTemplate.exchange(url, HttpMethod.GET, entity, GoogleCompletedMeetingResponse.class);
-
-            if (response.getBody() == null || response.getBody().getMeetings() == null)
-                return Collections.emptyList();
-
-            return response.getBody().getMeetings();
-
-        } catch (HttpClientErrorException.TooManyRequests ex) {
-            int wait = Optional.ofNullable(ex.getResponseHeaders().getFirst("Retry-After"))
-                    .map(Integer::parseInt)
-                    .orElse(10);
-            try { Thread.sleep(wait * 1000L);} catch (Exception ignored) {}
-            return fetchCompletedMeetings(userId, attempt + 1);
-
-        } catch (Exception ex) {
-            log.error("{} - ERROR: {}", method, ex.getMessage());
-            return Collections.emptyList();
-        }
-    }
-
-
-    // ---------------------------
-    // RECOVERY HANDLER
-    // ---------------------------
-    @Recover
-    public List<GoogleScheduledMeetingDto> recoverNetworkFailure(Exception ex, String userId, int attempt) {
-        Throwable cause = ex.getCause();
-
-        if (cause instanceof SocketTimeoutException) log.error("RECOVER - Timeout for {}", userId);
-        else if (cause instanceof ConnectException) log.error("RECOVER - Connection refused for {}", userId);
-        else if (cause instanceof UnknownHostException) log.error("RECOVER - DNS error for {}", userId);
-        else if (cause instanceof SSLHandshakeException) log.error("RECOVER - SSL handshake failed for {}", userId);
-        else log.error("RECOVER - General failure for {}", userId);
-
-        return Collections.emptyList();
-    }
-
-
-    // ---------------------------
-    // HTTP HEADERS
-    // ---------------------------
     private HttpHeaders getHeaders() {
         HttpHeaders headers = new HttpHeaders();
-        AccessTokenResponseModel token = getAccessToken();
-        headers.setBearerAuth(token != null ? token.getAccessToken() : "NULL");
+        headers.setBearerAuth(googleOAuth.getAccessTokenString());
         headers.setContentType(MediaType.APPLICATION_JSON);
         return headers;
+    }
+
+    
+    @Override
+    @Retryable(
+        retryFor = { ResourceAccessException.class, IOException.class },
+        maxAttempts = MAX_API_RETRIES,
+        backoff = @Backoff(delay = 3000)
+    )
+    public List<GoogleScheduledMeetingDto> fetchScheduledMeetings(String userEmail) {
+
+        try {
+            String url = googleUrlFactory.buildUpcomingMeetingsUrl("primary");
+
+            ResponseEntity<GoogleScheduledMeetingResponse> response =
+                    restTemplate.exchange(
+                            url,
+                            HttpMethod.GET,
+                            new HttpEntity<>(getHeaders()),
+                            GoogleScheduledMeetingResponse.class
+                    );
+
+            return response.getBody() != null
+                    ? response.getBody().getItems()
+                    : Collections.emptyList();
+
+        } catch (Exception ex) {
+            log.error("fetchScheduledMeetings error", ex);
+            return Collections.emptyList();
+        }
+    }
+
+    @Override
+    public List<GoogleCompletedMeetingDto> fetchCompletedMeetings(String userEmail) {
+
+        try {
+            String url = googleUrlFactory.buildCompletedMeetingsUrl(
+                    "primary", LocalDate.now().minusDays(2));
+
+            ResponseEntity<GoogleCompletedMeetingResponse> response =
+                    restTemplate.exchange(
+                            url,
+                            HttpMethod.GET,
+                            new HttpEntity<>(getHeaders()),
+                            GoogleCompletedMeetingResponse.class
+                    );
+
+            return response.getBody() != null
+                    ? response.getBody().getItems()
+                    : Collections.emptyList();
+
+        } catch (Exception ex) {
+            log.error("fetchCompletedMeetings error", ex);
+            return Collections.emptyList();
+        }
+    }
+
+    
+    @Override
+    public GoogleMeetingDetailsDto fetchMeetingDetails(String eventId) {
+
+        try {
+            String url = googleUrlFactory.buildMeetingDetailsUrl("primary", eventId);
+
+            return restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    new HttpEntity<>(getHeaders()),
+                    GoogleMeetingDetailsDto.class
+            ).getBody();
+
+        } catch (Exception ex) {
+            log.error("fetchMeetingDetails error", ex);
+            return null;
+        }
+    }
+
+    
+    @Override
+    public <T> List<T> fetchInvitees(String eventId, Class<T> attendeeType) {
+
+        GoogleMeetingDetailsDto event = fetchMeetingDetails(eventId);
+
+        if (event == null || event.getAttendees() == null) {
+            return Collections.emptyList();
+        }
+
+        return event.getAttendees()
+                .stream()
+                .map(a -> modelMapper.map(a, attendeeType))
+                .collect(Collectors.toList());
+    }
+
+    
+    @Override
+    public GoogleRecurringMeetingDetailsDto fetchRecurringMeetingDetails(String recurringEventId) {
+
+        try {
+            String url = googleUrlFactory.buildRecurringDetailsUrl("primary", recurringEventId);
+
+            return restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    new HttpEntity<>(getHeaders()),
+                    GoogleRecurringMeetingDetailsDto.class
+            ).getBody();
+
+        } catch (Exception ex) {
+            log.error("fetchRecurringMeetingDetails error", ex);
+            return null;
+        }
     }
 
 
     @Override
     public List<GoogleScheduledMeetingDto> fetchRecurringInstances(String masterEventId) {
-        String method = "fetchRecurringInstances()";
-        log.info("{} - Fetching recurring instances for masterEventId={}", method, masterEventId);
 
         try {
-            AccessTokenResponseModel token = getAccessToken();
-            if (token == null) return Collections.emptyList();
-
-            // Build URL for recurring meeting details
-            String url = googleUrlFactory.buildRecurringDetailsUrl(masterEventId);
-            HttpEntity<Void> entity = new HttpEntity<>(getHeaders());
+            String url = googleUrlFactory.buildRecurringOccurrencesUrl("primary", masterEventId);
 
             ResponseEntity<GoogleScheduledMeetingResponse> response =
-                    restTemplate.exchange(url, HttpMethod.GET, entity, GoogleScheduledMeetingResponse.class);
+                    restTemplate.exchange(
+                            url,
+                            HttpMethod.GET,
+                            new HttpEntity<>(getHeaders()),
+                            GoogleScheduledMeetingResponse.class
+                    );
 
-            if (response.getBody() == null || response.getBody().getMeetings() == null) {
-                log.warn("{} - No recurring instances found for masterEventId={}", method, masterEventId);
-                return Collections.emptyList();
-            }
-
-            return response.getBody().getMeetings();
-
-        } catch (HttpClientErrorException.TooManyRequests ex) {
-            int wait = Optional.ofNullable(ex.getResponseHeaders().getFirst("Retry-After"))
-                    .map(Integer::parseInt)
-                    .orElse(10);
-            try { Thread.sleep(wait * 1000L); } catch (Exception ignored) {}
-            // Retry once after wait
-            return fetchRecurringInstances(masterEventId);
+            return response.getBody() != null
+                    ? response.getBody().getItems()
+                    : Collections.emptyList();
 
         } catch (Exception ex) {
-            log.error("{} - ERROR fetching recurring instances: {}", method, ex.getMessage());
+            log.error("fetchRecurringInstances error", ex);
             return Collections.emptyList();
         }
     }
 
+    @Override
+    public List<ConferenceRecordDto> fetchConferenceRecords() {
+        try {
+            String url = googleUrlFactory.buildConferenceRecordsUrl();
+
+            ResponseEntity<GoogleConferenceRecordsResponse> response =
+                    restTemplate.exchange(
+                            url,
+                            HttpMethod.GET,
+                            new HttpEntity<>(getHeaders()),
+                            GoogleConferenceRecordsResponse.class
+                    );
+
+            return response.getBody() != null
+                    ? response.getBody().getConferenceRecords()
+                    : Collections.emptyList();
+
+        } catch (Exception ex) {
+            log.error("Error fetching conference records: {}", ex.getMessage(), ex);
+            return Collections.emptyList();
+        }
+    }
+
+
+    @Override
+    public List<GoogleCompletedMeetingParticipantDto> fetchParticipants(String conferenceRecordId) {
+        try {
+            String url = googleUrlFactory.buildConferenceParticipantsUrl(conferenceRecordId);
+
+            ResponseEntity<GoogleCompletedMeetingParticipantsResponse> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    new HttpEntity<>(getHeaders()),
+                    GoogleCompletedMeetingParticipantsResponse.class
+            );
+
+            return response.getBody() != null
+                    ? response.getBody().getParticipants()
+                    : Collections.emptyList();
+
+        } catch (Exception ex) {
+            log.error("Error fetching participants for conferenceRecordId {}: {}", conferenceRecordId, ex.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    @Override
+    public List<TranscriptDto> fetchTranscripts(String conferenceRecordId) {
+        try {
+            String url = googleUrlFactory.buildConferenceTranscriptsUrl(conferenceRecordId);
+
+            ResponseEntity<TranscriptResponse> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    new HttpEntity<>(getHeaders()),
+                    TranscriptResponse.class
+            );
+
+            return response.getBody() != null
+                    ? response.getBody().getTranscripts()
+                    : Collections.emptyList();
+
+        } catch (Exception ex) {
+            log.error("Error fetching transcripts for conferenceRecordId {}: {}", conferenceRecordId, ex.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+   
 }

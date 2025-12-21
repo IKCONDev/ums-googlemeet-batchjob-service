@@ -12,15 +12,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class GoogleCompletedMeetingResponse {
-
-    private String kind;                   
-    private String etag;                
-    private String summary;                
-    private String timeZone;            
-    private Integer pageNumber;         
-    private Integer pageCount;         
-    private Integer pageSize;              
-    private Integer totalRecords;       
-    private List<GoogleCompletedMeetingDto> meetings;  
+    
+    private List<GoogleCompletedMeetingDto> items;  
 
 }

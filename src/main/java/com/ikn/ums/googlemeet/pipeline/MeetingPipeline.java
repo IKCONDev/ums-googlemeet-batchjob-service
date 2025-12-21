@@ -7,7 +7,6 @@ import java.util.stream.Collectors;
 import com.ikn.ums.googlemeet.processor.MeetingProcessor;
 
 
-
 public class MeetingPipeline<T> {
 
     private List<T> meetings;
@@ -36,7 +35,7 @@ public class MeetingPipeline<T> {
     
     /**
      * Filters out meetings that have already been processed and inserted into the database.
-     * Implementations should check by UUID, meeting ID, or any unique identifier.
+     * Implementations should check by meeting ID.
      * @return the current MeetingPipeline with updated meeting list
      */
     public MeetingPipeline<T> filterAlreadyProcessed(){
@@ -46,7 +45,7 @@ public class MeetingPipeline<T> {
 
 
     /**
-     * attach meetingType to a zoom meeting using the given processor
+     * attach meetingType to a google meeting using the given processor
      * @return the current MeetingPipeline with updated meeting list
      */
     public MeetingPipeline<T> classifyType() {
@@ -57,7 +56,7 @@ public class MeetingPipeline<T> {
     }
 
     /**
-     * attach invitees to a zoom meeting  using the given processor
+     * attach invitees to a google meeting  using the given processor
      * @return the current MeetingPipeline with updated meeting list
      */
     public MeetingPipeline<T> attachInvitees() {
@@ -66,6 +65,48 @@ public class MeetingPipeline<T> {
                 .collect(Collectors.toList());
         return this;
     }
+    
+    
+    /**
+     * Attaches participants  information to each meeting in the pipeline.
+     *
+     * <p>The actual data enrichment is performed by the configured {@link MeetingProcessor},
+     * which may fetch participants from Goog API or derive them from previously fetched data.</p>
+     *
+     * <p>The method updates the internal meeting list with enriched meeting objects and
+     * returns the same pipeline instance to allow method chaining.</p>
+     *
+     * @return the current {@code MeetingPipeline} instance with participants attached
+     */
+    public MeetingPipeline<T> attachParticipants() {
+        this.meetings = meetings.stream()
+                .map(processor::attachParticipants)
+                .collect(Collectors.toList());
+        return this;
+    }
+    
+    /**
+     * Enriches each meeting DTO with additional metadata retrieved from external sources
+     * (typically the Zoom Meeting Details API).
+     *
+     * <p>This step allows the processor to populate fields that are not included in the
+     * basic meeting summary payload—such as timezone, join URL, creation timestamp,
+     * agenda, passwords, and other meeting-level configuration details.
+     *
+     * <p>The processor's {@code enrichMeetingData()} method is invoked for each meeting
+     * in the pipeline.
+     *
+     * <p>Returns the updated pipeline instance to allow fluent chaining.</p>
+     *
+     * @return this MeetingPipeline instance after enriching meeting data
+     */
+    public MeetingPipeline<T> enrichData() {
+        this.meetings = meetings.stream()
+                .map(processor::enrichMeetingData)
+                .collect(Collectors.toList());
+        return this;
+    }
+
     
     /**
      * Preprocesses the meetings before applying the rest of the pipeline.

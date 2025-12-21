@@ -42,7 +42,6 @@ public class UmsGooglemeetBatchjobServiceApplication extends SpringBootServletIn
 		return new RestTemplate();
 	}
 
-	// ModelMapper Bean
 	@Bean
 	public ModelMapper createMapper() {
 		ModelMapper mapper = new ModelMapper();
@@ -50,7 +49,6 @@ public class UmsGooglemeetBatchjobServiceApplication extends SpringBootServletIn
 		return mapper;
 	}
 
-	// Internal Eureka RestTemplate
 	@Bean
 	@LoadBalanced
 	public RestTemplate internalEurekaClientRestTemplate() {

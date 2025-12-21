@@ -1,59 +1,114 @@
 package com.ikn.ums.googlemeet.utils;
 
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
-
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+/**
+ * GoogleUrlFactory
+ *
+ * Responsible for constructing Google Calendar & Google Meet API URLs
+ * using placeholder-based templates defined in application properties.
+ *
+ * Design is intentionally aligned with ZoomUrlFactory for consistency.
+ */
 @Component
 public class GoogleUrlFactory {
 
+   
+
+    @Value("${google.calendarBaseUrl}")
+    private String calendarBaseUrl;   // https://www.googleapis.com/calendar/v3
+
+    @Value("${google.meetBaseUrl}")
+    private String meetBaseUrl;        // https://meet.googleapis.com/v2
+
+
     @Value("${google.meetings.upcoming.url}")
-    private String upcomingMeetingsUrl; // e.g., /calendar/v3/calendars/{calendarId}/events?timeMin={timeMin}&timeMax={timeMax}
+    private String upcomingMeetingsUrl;
 
     @Value("${google.meetings.completed.url}")
-    private String completedMeetingsUrl; // e.g., /calendar/v3/calendars/{calendarId}/events
+    private String completedMeetingsUrl;
 
     @Value("${google.meetings.meeting-details.url}")
-    private String meetingDetailsUrl; // /calendar/v3/calendars/{calendarId}/events/{eventId}
+    private String meetingDetailsUrl;
 
-    @Value("${google.reports.attendance.url}")
-    private String attendanceReportUrl; // /admin/reports/v1/activities?userKey={userKey}&applicationName=meet
+    @Value("${google.meetings.recurring-master.url}")
+    private String recurringMasterUrl;
 
-    private static final String CALENDAR_BASE_URL = "https://www.googleapis.com/calendar/v3/calendars";
+    @Value("${google.meetings.recurring-occurrences.url}")
+    private String recurringOccurrencesUrl;
 
-    // ---------------------------------------------
-    // Upcoming Meetings URL
-    // ---------------------------------------------
+    @Value("${google.meetings.participants.url}")
+    private String participantsUrl;
+
+    @Value("${google.meetings.conference-records.url}")
+    private String conferenceRecordsUrl;
+
+    @Value("${google.meetings.transcripts.url}")
+    private String transcriptsUrl;
     
+    
+
+
+    /**
+     * Builds URL to fetch upcoming/scheduled meetings.
+     *
+     * Google Endpoint:
+     *   GET /calendars/{calendarId}/events
+     */
     public String buildUpcomingMeetingsUrl(String calendarId) {
-        ZonedDateTime now = ZonedDateTime.now();
+
+        ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
         ZonedDateTime sevenDaysLater = now.plusDays(7);
 
-        String timeMin = now.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
-        String timeMax = sevenDaysLater.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+        Map<String, String> values = new HashMap<>();
+        values.put("calendarId", calendarId);
+        values.put("timeMin", now.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
+        values.put("timeMax", sevenDaysLater.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
 
-        return buildUpcomingMeetingsUrl(calendarId, timeMin, timeMax);
-    }
-
-
-    public String buildUpcomingMeetingsUrl(String calendarId, String timeMin, String timeMax) {
-        Map<String, String> values = Map.of(
-                "calendarId", calendarId,
-                "timeMin", timeMin,
-                "timeMax", timeMax
-        );
         return UrlBuilderUtil.buildUrl(upcomingMeetingsUrl, values);
     }
 
-    // ---------------------------------------------
-    // Meeting Details URL
-    // ---------------------------------------------
+
+
+    /**
+     * Builds URL to fetch completed meetings from a given date till now.
+     *
+     * Google Endpoint:
+     *   GET /calendars/{calendarId}/events?timeMin=&timeMax=
+     */
+    public String buildCompletedMeetingsUrl(String calendarId, LocalDate fromDate) {
+
+        String fromUtc = fromDate.atStartOfDay(ZoneOffset.UTC)
+                .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+
+        String toUtc = ZonedDateTime.now(ZoneOffset.UTC)
+                .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+
+        Map<String, String> values = new HashMap<>();
+        values.put("calendarId", calendarId);
+        values.put("fromUtc", fromUtc);
+        values.put("toUtc", toUtc);
+
+        return UrlBuilderUtil.buildUrl(completedMeetingsUrl, values);
+    }
+
+
+    /**
+     * Builds URL to fetch meeting/event details.
+     *
+     * Google Endpoint:
+     *   GET /calendars/{calendarId}/events/{eventId}
+     */
     public String buildMeetingDetailsUrl(String calendarId, String eventId) {
         Map<String, String> values = Map.of(
                 "calendarId", calendarId,
@@ -62,37 +117,82 @@ public class GoogleUrlFactory {
         return UrlBuilderUtil.buildUrl(meetingDetailsUrl, values);
     }
 
-    // ---------------------------------------------
-    // Completed Meetings URL
-    // ---------------------------------------------
-    public String buildCompletedMeetingsUrl(String calendarId, LocalDate fromDate) {
-        String timeMin = fromDate.toString();
-        String timeMax = LocalDate.now().toString();
-        return CALENDAR_BASE_URL + "/" + calendarId + "/events?timeMin=" + timeMin +
-                "&timeMax=" + timeMax + "&singleEvents=true&orderBy=startTime";
+    /**
+     * Builds URL to fetch recurring meeting master details.
+     */
+    public String buildRecurringDetailsUrl(String calendarId, String recurringEventId) {
+        Map<String, String> values = Map.of(
+                "calendarId", calendarId,
+                "recurringEventId", recurringEventId
+        );
+        return UrlBuilderUtil.buildUrl(recurringMasterUrl, values);
     }
 
-    // ---------------------------------------------
-    // Recurring Meeting Instances URL
-    // ---------------------------------------------
-    // Original method requiring calendarId
-    public String buildRecurringDetailsUrl(String calendarId, String masterEventId) {
-        return CALENDAR_BASE_URL + "/" + calendarId + "/events/" + masterEventId + "/instances";
+    /**
+     * Builds URL to fetch recurring meeting occurrences.
+     */
+    public String buildRecurringOccurrencesUrl(String calendarId, String recurringEventId) {
+        Map<String, String> values = Map.of(
+                "calendarId", calendarId,
+                "recurringEventId", recurringEventId
+        );
+        return UrlBuilderUtil.buildUrl(recurringOccurrencesUrl, values);
     }
 
-    // Overloaded method using "primary" as default calendarId
-    public String buildRecurringDetailsUrl(String masterEventId) {
-        return buildRecurringDetailsUrl("primary", masterEventId);
+
+    /**
+     * Builds URL to fetch participants of a completed Google Meet.
+     *
+     * Google Meet Endpoint:
+     *   GET /conferenceRecords/{conferenceRecordId}/participants
+     */
+//    public String buildParticipantsUrl(String conferenceRecordId) {
+//        Map<String, String> values = Map.of(
+//                "conferenceRecordId", encode(conferenceRecordId)
+//        );
+//        return UrlBuilderUtil.buildUrl(participantsUrl, values);
+//    }
+
+    private String encode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+    public String buildMeetingsDetailsUrl(String eventId) {
+        // Base URL for Google Calendar API
+        String calendarId = "primary"; // or any specific calendar ID
+        return "https://www.googleapis.com/calendar/v3/calendars/" + calendarId + "/events/" + eventId + "?conferenceDataVersion=1";
+    }
+    
+    
+    /**
+     * Builds URL to list conference records.
+     *
+     * Google Meet Endpoint:
+     *   GET /conferenceRecords
+     */
+    public String buildConferenceRecordsUrl() {
+        return conferenceRecordsUrl;
     }
 
-    // ---------------------------------------------
-    // Attendance Report URL
-    // ---------------------------------------------
-    public String buildAttendanceReportUrl(String userKey, String startTime, String endTime) {
-        Map<String, String> values = new HashMap<>();
-        values.put("userKey", userKey);
-        values.put("startTime", startTime);
-        values.put("endTime", endTime);
-        return UrlBuilderUtil.buildUrl(attendanceReportUrl, values);
+    /**
+     * Builds URL to fetch participants of a completed Google Meet.
+     */
+    public String buildConferenceParticipantsUrl(String conferenceRecordId) {
+        Map<String, String> values = Map.of(
+                "conferenceRecordId",conferenceRecordId
+        );
+        return UrlBuilderUtil.buildUrl(participantsUrl, values);
     }
+
+    /**
+     * Builds URL to fetch transcripts of a completed Google Meet.
+     */
+    public String buildConferenceTranscriptsUrl(String conferenceRecordId) {
+        Map<String, String> values = Map.of(
+                "conferenceRecordId", conferenceRecordId
+        );
+        return UrlBuilderUtil.buildUrl(transcriptsUrl, values);
+    }
+
+    
+
 }

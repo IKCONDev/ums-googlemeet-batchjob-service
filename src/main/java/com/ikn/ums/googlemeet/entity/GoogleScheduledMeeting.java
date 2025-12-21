@@ -1,10 +1,19 @@
 package com.ikn.ums.googlemeet.entity;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
+import com.ikn.ums.googlemeet.enums.GoogleMeetingType;
+
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -27,11 +36,12 @@ public class GoogleScheduledMeeting {
     @GeneratedValue(generator = "google_scheduled_meeting_gen")
     private Long id;
 
-    private String googleEventId;      
+    @Column(name = "google_event_id", unique = true, nullable = false)
+    private String googleEventId;       
     private String summary;           
     private String description;
     private String organizerEmail;
-    private String meetingType;        
+         
 
     private String startTime;
     private String endTime;
@@ -39,10 +49,10 @@ public class GoogleScheduledMeeting {
     private String timezone;
     private String createdAt;
 
-    private String joinUrl;            // Hangout link -> event.getHangoutLink()
+    @Column(name = "hangoutLink")
+    private String hangoutLink;
+          // Hangout link -> event.getHangoutLink()
 
-   // @OneToMany(mappedBy = "meeting", cascade = CascadeType.ALL, orphanRemoval = true)
-//    private List<GoogleScheduledMeetingAttendee> attendees = new ArrayList<>();
 
     private String insertedBy = "AUTO-BATCH-PROCESS";
     private String insertedDate = LocalDateTime.now().toString();
@@ -53,4 +63,21 @@ public class GoogleScheduledMeeting {
     private Long batchId;
     private String departmentName;
     private String teamName;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "meeting_type")
+    private GoogleMeetingType meetingType;
+    
+    
+    
+
+    @OneToMany(mappedBy = "meeting", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<GoogleScheduledMeetingAttendee> attendees = new ArrayList<>();
+    public void addAttendee(GoogleScheduledMeetingAttendee attendee) {
+        attendees.add(attendee);
+        attendee.setMeeting(this);
+    }
+    
+    private String recurringEventId; 
+
 }

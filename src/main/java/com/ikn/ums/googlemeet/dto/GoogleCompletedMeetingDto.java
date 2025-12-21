@@ -1,5 +1,11 @@
 package com.ikn.ums.googlemeet.dto;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
+import com.ikn.ums.zoom.dto.ZoomCompletedMeetingParticipantDto;
+import com.ikn.ums.zoom.dto.ZoomTranscriptMetadataDto;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -13,7 +19,7 @@ import lombok.NoArgsConstructor;
 public class GoogleCompletedMeetingDto {
 
     private String id;                   
-    private String recurringEventId;     //if recurringevent id == null single instance. , not null== recuuring instance.
+    private String recurringEventId;     
     private String summary;              
     private String description;          
     private String hangoutLink;              
@@ -23,11 +29,8 @@ public class GoogleCompletedMeetingDto {
     private String timezone;             
     private EventTime start;             
     private EventTime end;  
-    private String googleEventId;		
+    private String googleEventId; 
 
-    /**
-     * Nested class for start/end times
-     */
     @Data
     @AllArgsConstructor
     @NoArgsConstructor
@@ -36,50 +39,41 @@ public class GoogleCompletedMeetingDto {
         private String timeZone;  
     }
 
-    /**
-     * Helper method to get start time as ISO string
-     */
     public String getStartTime() {
         return start != null ? start.getDateTime() : null;
     }
 
-    /**
-     * Helper method to get end time as ISO string
-     */
     public String getEndTime() {
         return end != null ? end.getDateTime() : null;
     }
 
-    /**
-     * Helper method to get start timezone
-     */
     public String getStartTimeZone() {
         return start != null ? start.getTimeZone() : timezone;
     }
 
-    /**
-     * Helper method to get end timezone
-     */
     public String getEndTimeZone() {
         return end != null ? end.getTimeZone() : timezone;
     }
-    
-    
+
     private String emailId;
     private Long departmentId;
     private Long teamId;
     private Long batchId;
     private String departmentName;
     private String teamName;
-    
-    
-    
-    
-    private String MeetingType;
 
+    private String meetingType;
+    private List<String> recurrence;
+
+    private String insertedBy = "AUTO-BATCH-PROCESS";
+    private String insertedDate = LocalDateTime.now().toString();
+
+    private List<GoogleCompletedMeetingAttendeeDto> attendees;
+    
+ private List<GoogleCompletedMeetingParticipantDto> participants;
+    
+    private List<TranscriptDto> transcripts;
+    
+    private String conferenceRecordId;
+    
 }
-
-
-
-
-

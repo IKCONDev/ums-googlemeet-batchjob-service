@@ -1,88 +1,107 @@
 package com.ikn.ums.googlemeet.service;
 
-
 import java.util.List;
 
+import com.ikn.ums.googlemeet.dto.ConferenceRecordDto;
 import com.ikn.ums.googlemeet.dto.GoogleCompletedMeetingDto;
+import com.ikn.ums.googlemeet.dto.GoogleCompletedMeetingParticipantDto;
+import com.ikn.ums.googlemeet.dto.GoogleMeetingDetailsDto;
+import com.ikn.ums.googlemeet.dto.GoogleRecurringMeetingDetailsDto;
 import com.ikn.ums.googlemeet.dto.GoogleScheduledMeetingDto;
-//import com.ikn.ums.googlemeet.dto.GoogleAttendeeDto;
+import com.ikn.ums.googlemeet.dto.TranscriptDto;
 import com.ikn.ums.googlemeet.model.AccessTokenResponseModel;
 
 /**
- * GoogleEventService
+ * GoogleCalendarService
  *
- * Provides an abstraction layer for all outbound calls made to
- * Google Calendar / Google Meet APIs. Implementations of this interface must handle:
+ * Acts as the primary abstraction over Google Calendar APIs
+ * for Google Meet-related scheduling and metadata.
  *
- * <ul>
- *     <li>Access token retrieval</li>
- *     <li>Fetching scheduled/upcoming meetings</li>
- *     <li>Fetching completed meetings</li>
- *     <li>Fetching meeting invitees and metadata</li>
- *     <li>Error handling, retry logic, and fail-safe returns</li>
- * </ul>
+ * IMPORTANT:
+ *  - Calendar API → meetings, events, invitees, recurrence
+ *  - Meet API → participants, attendance, conference records
  *
- * All methods must guarantee safe failure by returning empty lists instead
- * of throwing exceptions to the service layer.
+ * This interface intentionally exposes BOTH because
+ * Google splits data across two APIs.
  */
 public interface GoogleCalendarService {
 
     /**
-     * Retrieves the OAuth access token required for making
-     * authorized calls to Google APIs.
+     * Retrieves the OAuth access token used for Google API calls.
      *
-     * @return the active Google access token, or null if loading failed
+     * @return access token response model
      */
     AccessTokenResponseModel getAccessToken();
 
     /**
-     * Fetches the list of upcoming/scheduled Google Meet events
-     * for the provided user.
+     * Fetch upcoming (scheduled) Google Meet meetings.
      *
-     * Implementations should include:
-     * <ul>
-     *     <li>Access token validation</li>
-     *     <li>Retry logic for network issues</li>
-     *     <li>Handling of Google API rate limits</li>
-     * </ul>
-     *
-     * @param userEmail Google user email
-     * @return list of scheduled meeting DTOs (never null)
+     * @param userEmail Google Workspace user email
+     * @return list of scheduled meetings (never null)
      */
     List<GoogleScheduledMeetingDto> fetchScheduledMeetings(String userEmail);
 
     /**
-     * Fetches the invitee list for a specific Google Meet event.
+     * Fetch completed Google Meet meetings.
      *
-     * @param eventId the Google Calendar event ID
-     * @return list of attendees (never null)
-     */
-   // List<GoogleAttendeeDto> fetchAttendees(String eventId);
-
-    /**
-     * Fetches the list of completed Google Meet events
-     * for the provided user.
+     * NOTE:
+     * These are Calendar EVENTS, not attendance records.
      *
-     * Implementations should apply:
-     * <ul>
-     *     <li>Access token handling</li>
-     *     <li>Retry logic for network failures</li>
-     *     <li>Rate-limit handling</li>
-     * </ul>
-     *
-     * @param userEmail Google user email
-     * @return list of completed meeting DTOs (never null)
+     * @param userEmail Google Workspace user email
+     * @return list of completed meetings (never null)
      */
     List<GoogleCompletedMeetingDto> fetchCompletedMeetings(String userEmail);
 
     /**
-     * Fetches the child instances of a recurring Google Meet event.
+     * Fetch full Google Calendar event details.
      *
-     * Google Calendar represents recurring events with a master event ID,
-     * and individual occurrences can be retrieved separately.
+     * @param eventId Google Calendar event ID
+     * @return meeting details or null
+     */
+    GoogleMeetingDetailsDto fetchMeetingDetails(String eventId);
+
+    /**
+     * Fetch calendar invitees (attendees) for a meeting.
      *
-     * @param masterEventId The master event ID of the recurring meeting
-     * @return list of child meeting instances, or empty list if none
+     * NOTE:
+     * These are INVITEES, not actual participants.
+     *
+     * @param eventId Google Calendar event ID
+     * @param attendeeType DTO class
+     * @param <T> attendee DTO type
+     * @return list of invitees (never null)
+     */
+    <T> List<T> fetchInvitees(String eventId, Class<T> attendeeType);
+
+    /**
+     * Fetch recurring meeting master event details.
+     *
+     * @param recurringEventId master event ID
+     * @return recurring meeting details
+     */
+    GoogleRecurringMeetingDetailsDto fetchRecurringMeetingDetails(String recurringEventId);
+
+    /**
+     * Fetch instances (occurrences) of a recurring meeting.
+     *
+     * Uses:
+     *   GET /events/{eventId}/instances
+     *
+     * @param masterEventId recurring master event ID
+     * @return list of meeting instances
      */
     List<GoogleScheduledMeetingDto> fetchRecurringInstances(String masterEventId);
+    
+    
+    
+
+    /** Fetch participants of a conference record */
+    List<GoogleCompletedMeetingParticipantDto> fetchParticipants(String conferenceRecordId);
+
+    /** Fetch transcripts of a conference record */
+    List<TranscriptDto> fetchTranscripts(String conferenceRecordId);
+
+	List<ConferenceRecordDto> fetchConferenceRecords();
+
+
 }

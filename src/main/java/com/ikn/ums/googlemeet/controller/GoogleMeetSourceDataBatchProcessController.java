@@ -17,7 +17,21 @@ import com.ikn.ums.googlemeet.service.GoogleCompletedMeetingService;
 import com.ikn.ums.googlemeet.service.GoogleScheduledMeetingService;
 import com.ikn.ums.googlemeet.utils.InitializeGoogleOAuth;
 
+import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
+
+/**
+ * @author CheniminiSiriLakshmi
+ * Central REST controller for managing Google Meet integration operations.
+ * 
+ * <p>
+ * Provides endpoints that support communication with the Google Meet platform,
+ * including token generation, event data processing, and other Meet
+ * functionalities as the application evolves. Processing responsibilities
+ * are delegated to service-layer components to maintain modularity.
+ * </p>
+ * 
+ */
 
 @RestController
 @RequestMapping("/googlemeet")
@@ -51,6 +65,7 @@ public class GoogleMeetSourceDataBatchProcessController {
 	/**
      * Trigger batch fetch of completed Google Meet events for all configured users.
      */
+	@Transactional
     @GetMapping("/completed-meetings/batch")
     public ResponseEntity<List<GoogleCompletedMeetingDto>> performCompletedMeetingsRawDataBatchProcessing() {
         String methodName = "performCompletedMeetingsRawDataBatchProcessing()";
@@ -100,17 +115,11 @@ public class GoogleMeetSourceDataBatchProcessController {
                     .status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Collections.emptyList());
 
-            // If needed later:
             // throw new ControllerException(
             //     ErrorCodeMessages.ERR_GOOGLE_SCHEDULED_BATCH_EXCEPTION_CODE,
             //     ErrorCodeMessages.ERR_GOOGLE_SCHEDULED_BATCH_EXCEPTION_MSG);
         }
     }
-
-
-
-	
-
 
 }
 

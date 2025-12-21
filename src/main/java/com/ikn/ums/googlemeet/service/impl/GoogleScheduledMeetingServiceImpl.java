@@ -1,177 +1,174 @@
 package com.ikn.ums.googlemeet.service.impl;
-
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
+ 
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
-
+ 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.*;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.HttpClientErrorException;
-
-import com.ikn.ums.googlemeet.client.EmployeeServiceClient;
+import org.springframework.web.client.RestTemplate;
+ 
+import com.ikn.ums.googlemeet.dto.GoogleCompletedMeetingAttendeeDto;
+import com.ikn.ums.googlemeet.dto.GoogleScheduledMeetingAttendeeDto;
 import com.ikn.ums.googlemeet.dto.GoogleScheduledMeetingDto;
+import com.ikn.ums.googlemeet.entity.GoogleCompletedMeetingAttendee;
 import com.ikn.ums.googlemeet.entity.GoogleScheduledMeeting;
-import com.ikn.ums.googlemeet.externaldto.EmployeeDto;
-import com.ikn.ums.googlemeet.externaldto.UMSScheduledMeetingDto;
-import com.ikn.ums.googlemeet.mapper.GoogleMeetingMapper;
-import com.ikn.ums.googlemeet.pipeline.MeetingPipeline;
+import com.ikn.ums.googlemeet.entity.GoogleScheduledMeetingAttendee;
+import com.ikn.ums.googlemeet.enums.GoogleMeetingType;
+import com.ikn.ums.googlemeet.model.GoogleScheduledMeetingResponse;
 import com.ikn.ums.googlemeet.processor.GoogleScheduledMeetingProcessor;
-import com.ikn.ums.googlemeet.service.GoogleCalendarService;
-import com.ikn.ums.googlemeet.service.GoogleMeetingPersistenceService;
+import com.ikn.ums.googlemeet.repo.GoogleScheduledMeetingRepository;
 import com.ikn.ums.googlemeet.service.GoogleScheduledMeetingService;
-
+import com.ikn.ums.googlemeet.utils.InitializeGoogleOAuth;
+ 
+import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
-
-/**
- * Google Meet scheduled meetings batch-processing implementation.
- */
-@Slf4j
+ 
 @Service
+@Slf4j
 public class GoogleScheduledMeetingServiceImpl implements GoogleScheduledMeetingService {
-
+ 
     @Autowired
-    private EmployeeServiceClient employeeServiceClient;
-
+    private InitializeGoogleOAuth initializeGoogleOAuth;
+ 
     @Autowired
-    private GoogleMeetingMapper googleMeetingMapper;
-
-    @Value("${google.meetings.meeting-details.url}")
-    private String meetingDetailsUrl;
-
+    private GoogleScheduledMeetingRepository scheduledMeetingRepository;
+ 
     @Autowired
-    private GoogleScheduledMeetingProcessor scheduledMeetingProcessor;
-
+    @Qualifier("googleRestTemplate")
+    private RestTemplate restTemplate;
+ 
     @Autowired
-    private GoogleCalendarService googlecalendarService;
-
-    @Autowired
-    private GoogleMeetingPersistenceService googleMeetingsPersistenceService;
-
-    private static final ZoneId ZONE = ZoneId.of("Asia/Calcutta");
-    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
-
+    private GoogleScheduledMeetingProcessor meetingProcessor;
+ 
     @Override
     public List<GoogleScheduledMeetingDto> performScheduledMeetingsRawDataBatchProcessing() {
-
-        String methodName = "performScheduledMeetingsRawDataBatchProcessing()";
-        log.info("{} - STARTED", methodName);
-
-        // Fetch employees (or hardcoded emails)
-        List<EmployeeDto> employeeList = employeeServiceClient.getEmployeesListFromEmployeeService();
-        log.info("{} - Employee list fetched: {}", methodName, employeeList);
-
-        // For testing, fallback to a hardcoded email list
-        List<String> emailIds = employeeList.isEmpty()
-                ? List.of("siri.chenimini1@gmail.com")
-                : employeeList.stream().map(EmployeeDto::getEmail).collect(Collectors.toList());
-
-        List<CompletableFuture<List<GoogleScheduledMeetingDto>>> futuresList = new ArrayList<>();
-
-        for (String emailId : emailIds) {
-            futuresList.add(getScheduledMeetingsAsync(emailId));
-        }
-
-        // Wait for all async calls to complete
-        CompletableFuture.allOf(futuresList.toArray(new CompletableFuture[0])).join();
-
-        // Merge results
-        List<GoogleScheduledMeetingDto> masterDtoList =
-                futuresList.stream()
-                        .map(CompletableFuture::join)
-                        .flatMap(List::stream)
-                        .collect(Collectors.toList());
-
-        // Filter only upcoming events within next 1 month
-        LocalDateTime now = LocalDateTime.now(ZONE);
-        LocalDateTime plusOneMonth = now.plusMonths(1);
-
-        masterDtoList = masterDtoList.stream()
-                .filter(m -> {
-                    if (m.getStartTime() == null) return false;
-                    try {
-                        LocalDateTime startTime = LocalDateTime.parse(m.getStartTime(), FORMATTER);
-                        return startTime.isAfter(now) && startTime.isBefore(plusOneMonth);
-                    } catch (Exception e) {
-                        log.warn("Failed to parse startTime: {}", m.getStartTime());
-                        return false;
-                    }
-                })
-                .collect(Collectors.toList());
-
-        // Convert DTO → Entity
-        List<GoogleScheduledMeeting> masterEntityList =
-                googleMeetingMapper.toGoogleScheduledEntityList(masterDtoList);
-
-        // Reset DB entries then persist fresh records
-        List<GoogleScheduledMeeting> persistedList =
-                googleMeetingsPersistenceService.deleteResetAndPersist(masterEntityList);
-
-        // Convert back to DTO
-        masterDtoList = googleMeetingMapper.toGoogleScheduledDtoList(persistedList);
-
-        // Convert to UMS DTO format
-        List<UMSScheduledMeetingDto> umsDtoList =
-                googleMeetingMapper.toUMSDtoScheduledList(masterDtoList);
-
-        log.info("{} - COMPLETED. Total scheduled meetings saved: {}",
-                methodName, masterEntityList.size());
-
-        return masterDtoList;
+ 
+        List<String> emailIds = List.of("ums-test@ikcontech.com");
+ 
+        List<CompletableFuture<List<GoogleScheduledMeetingDto>>> futures =
+                emailIds.stream()
+                        .map(this::getScheduledMeetingsAsync)
+                        .toList();
+ 
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+ 
+        List<GoogleScheduledMeetingDto> scheduledMeetings =
+                futures.stream()
+                        .flatMap(f -> f.join().stream())
+                        .toList();
+ 
+        // Delegate business logic to processor
+        scheduledMeetings = meetingProcessor.preProcess(scheduledMeetings);
+ 
+        List<GoogleScheduledMeeting> entities =
+                scheduledMeetings.stream()
+                        .map(this::mapToEntity)
+                        .toList();
+ 
+        persistScheduledMeetings(entities);
+ 
+        log.info("Scheduled meetings saved/updated: {}", entities.size());
+ 
+        return scheduledMeetings;
     }
-
-    /**
-     * Async wrapper to fetch per-user meetings concurrently.
-     */
-    @Async("googleScheduledMeetingApiExecutor")
+ 
+    private GoogleScheduledMeeting mapToEntity(GoogleScheduledMeetingDto dto) {
+        GoogleScheduledMeeting meeting = new GoogleScheduledMeeting();
+ 
+        meeting.setGoogleEventId(dto.getId());
+        meeting.setSummary(dto.getSummary());
+        meeting.setDescription(dto.getDescription());
+        meeting.setHangoutLink(dto.getHangoutLink());
+        meeting.setStartTime(dto.getStartTime());
+        meeting.setEndTime(dto.getEndTime());
+        meeting.setMeetingType(
+                GoogleMeetingType.valueOf(dto.getMeetingType())
+        );
+        
+        if (dto.getAttendees() != null) {
+            for (GoogleScheduledMeetingAttendeeDto aDto : dto.getAttendees()) {
+                GoogleScheduledMeetingAttendee attendee = new GoogleScheduledMeetingAttendee();
+                attendee.setEmail(aDto.getEmail());
+                attendee.setOrganizer(aDto.getOrganizer());
+                attendee.setSelf(aDto.getSelf());
+                attendee.setResponseStatus(aDto.getResponseStatus());
+ 
+                meeting.addAttendee(attendee);
+            }
+        }
+ 
+ 
+        return meeting;
+    }
+ 
+    @Transactional
+    private void persistScheduledMeetings(List<GoogleScheduledMeeting> meetings) {
+ 
+        for (GoogleScheduledMeeting meeting : meetings) {
+ 
+            GoogleScheduledMeeting existing =
+                    scheduledMeetingRepository
+                            .findByGoogleEventId(meeting.getGoogleEventId())
+                            .orElse(null);
+ 
+            if (existing == null) {
+                scheduledMeetingRepository.save(meeting);
+            } else {
+            	existing.setMeetingType(meeting.getMeetingType());
+                existing.setSummary(meeting.getSummary());
+                existing.setDescription(meeting.getDescription());
+                existing.setStartTime(meeting.getStartTime());
+                existing.setEndTime(meeting.getEndTime());
+                existing.setHangoutLink(meeting.getHangoutLink());
+                
+             // Clear and re-add attendees
+                existing.getAttendees().clear();
+                meeting.getAttendees().forEach(existing::addAttendee);
+ 
+             
+                scheduledMeetingRepository.save(existing);
+            }
+        }
+    }
+ 
+    @Async("googleMeetExecutor")
     public CompletableFuture<List<GoogleScheduledMeetingDto>> getScheduledMeetingsAsync(String userEmail) {
-
-        String methodName = "getScheduledMeetingsAsync()";
-        String thread = Thread.currentThread().getName();
-        log.info("{} - STARTED async for user: {} on thread: {}", methodName, userEmail, thread);
-
-        List<GoogleScheduledMeetingDto> result = getScheduledMeetings(userEmail);
-
-        log.info("{} - COMPLETED async for user: {} on thread: {}. Fetched {} meetings.",
-                methodName, userEmail, thread, result.size());
-
-        return CompletableFuture.completedFuture(result);
+        return CompletableFuture.completedFuture(getScheduledMeetings(userEmail));
     }
-
-    /**
-     * Core Google API fetch + processing pipeline.
-     */
+ 
     private List<GoogleScheduledMeetingDto> getScheduledMeetings(String userEmail) {
-
-        String methodName = "getScheduledMeetings()";
-
         try {
-            // Fetch meetings from Google API
-            List<GoogleScheduledMeetingDto> meetings = googlecalendarService.fetchScheduledMeetings(userEmail);
-
-            // Process meetings through pipeline
-            return MeetingPipeline
-                    .start(meetings, scheduledMeetingProcessor)
-                    .preProcess()
-                    .classifyType()
-                    .attachInvitees()
-                    .done();
-
-        } catch (HttpClientErrorException ex) {
-            log.error("{} - Client error {} for {}: {}",
-                    methodName, ex.getStatusCode(), userEmail, ex.getResponseBodyAsString());
-            return Collections.emptyList();
-
-        } catch (Exception ex) {
-            log.error("{} - Unrecoverable error for {}: {}",
-                    methodName, userEmail, ex.getMessage());
+            String token = initializeGoogleOAuth.getAccessTokenString();
+ 
+            String url = initializeGoogleOAuth.getBaseUrl()
+                    + "/calendars/" + userEmail
+                    + "/events?conferenceDataVersion=1";
+ 
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBearerAuth(token);
+ 
+            ResponseEntity<GoogleScheduledMeetingResponse> response =
+                    restTemplate.exchange(
+                            url,
+                            HttpMethod.GET,
+                            new HttpEntity<>(headers),
+                            GoogleScheduledMeetingResponse.class
+                    );
+ 
+            return response.getBody() != null
+                    ? response.getBody().getItems()
+                    : Collections.emptyList();
+ 
+        } catch (Exception e) {
+            log.error("Error fetching scheduled meetings for {}", userEmail, e);
             return Collections.emptyList();
         }
     }
+ 
 }
+ 
+ 

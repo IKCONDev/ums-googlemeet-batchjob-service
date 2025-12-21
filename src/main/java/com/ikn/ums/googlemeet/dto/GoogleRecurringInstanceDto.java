@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class GoogleRecurringInstanceDto {
 
-    @JsonProperty("instanceEventId")
+    @JsonProperty("id")
     private String instanceEventId;  
     
     private String recurringEventId; // recurring event instance ID
@@ -25,6 +25,4 @@ public class GoogleRecurringInstanceDto {
     @JsonProperty("status")
     private String status;
 
-    @JsonProperty("meetUrl")
-    private String meetUrl;
 }

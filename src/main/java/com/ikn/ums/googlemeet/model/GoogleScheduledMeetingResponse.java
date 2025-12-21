@@ -13,13 +13,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class GoogleScheduledMeetingResponse {
-
-    private String kind;                   
-    private String etag;                  
-    private String summary;                
-    private String timeZone;               
-    private String nextSyncToken;          
-    private Integer totalRecords;          
-    private List<GoogleScheduledMeetingDto> meetings; 
+        
+    private List<GoogleScheduledMeetingDto> items; 
 
 }

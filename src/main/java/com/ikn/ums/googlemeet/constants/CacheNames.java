@@ -1,4 +1,4 @@
-package com.ikn.ums.googlemeet.cache;
+package com.ikn.ums.googlemeet.constants;
 
 public class CacheNames {
 

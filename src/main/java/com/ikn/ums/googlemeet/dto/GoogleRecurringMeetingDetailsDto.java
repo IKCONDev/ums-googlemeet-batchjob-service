@@ -13,7 +13,7 @@ import java.util.List;
 public class GoogleRecurringMeetingDetailsDto {
 
     // Calendar Event Primary Fields
-    @JsonProperty("eventId")
+    @JsonProperty("id")
     private String eventId;
 
     @JsonProperty("summary")
@@ -43,10 +43,6 @@ public class GoogleRecurringMeetingDetailsDto {
     // Recurrence Rule (RRULE)
     @JsonProperty("recurrence")
     private List<String> recurrence;
-
-    // Meet Links
-    @JsonProperty("meetUrl")
-    private String meetUrl;
 
     @JsonProperty("entryPoints")
     private List<GoogleEntryPointDto> entryPoints;

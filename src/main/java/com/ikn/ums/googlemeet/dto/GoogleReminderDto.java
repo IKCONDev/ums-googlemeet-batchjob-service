@@ -1,11 +1,36 @@
+//package com.ikn.ums.googlemeet.dto;
+//
+//import com.fasterxml.jackson.annotation.JsonProperty;
+//import lombok.Data;
+//
+//@Data
+//public class GoogleReminderDto {
+//
+//    @JsonProperty("useDefault")
+//    private Boolean useDefault;
+//}
+
+
 package com.ikn.ums.googlemeet.dto;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.List;
+
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class GoogleReminderDto {
-
-    @JsonProperty("useDefault")
     private Boolean useDefault;
+    private List<Reminder> overrides;
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class Reminder {
+        private String method; // popup, email
+        private Integer minutes;
+    }
 }
