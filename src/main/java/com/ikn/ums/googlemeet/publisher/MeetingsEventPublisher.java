@@ -17,16 +17,16 @@ public class MeetingsEventPublisher {
 
     private final RabbitTemplate rabbitTemplate;
 
-    @Value("${rabbitmq.exchange.scheduled-meetings}")
+    @Value("${rabbitmq.exchange.googlemeet-scheduled-meetings}")
     private String scheduledExchangeName;
 
-    @Value("${rabbitmq.routing-key.scheduled-meetings}")
+    @Value("${rabbitmq.routing-key.googlemeet-scheduled-meetings}")
     private String scheduledRoutingKey;
 
-    @Value("${rabbitmq.exchange.completed-meetings}")
+    @Value("${rabbitmq.exchange.googlemeet-completed-meetings}")
     private String completedExchangeName;
 
-    @Value("${rabbitmq.routing-key.completed-meetings}")
+    @Value("${rabbitmq.routing-key.googlemeet-completed-meetings}")
     private String completedRoutingKey;
 
     /**

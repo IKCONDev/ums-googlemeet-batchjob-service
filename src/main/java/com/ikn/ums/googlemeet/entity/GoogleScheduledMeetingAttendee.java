@@ -27,7 +27,7 @@ public class GoogleScheduledMeetingAttendee {
             allocationSize = 1
     )
     @GeneratedValue(generator = "google_scheduled_meeting_attendee_gen")
-    private Long id;
+    private Long sid;
 
     private String email;
 
@@ -40,4 +40,6 @@ public class GoogleScheduledMeetingAttendee {
     @ManyToOne
     @JoinColumn(name = "sch_meeting_id", nullable = false)
     private GoogleScheduledMeeting meeting;
+    
+    private String id;
 }

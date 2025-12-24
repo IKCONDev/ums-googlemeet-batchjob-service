@@ -9,8 +9,8 @@ public class TranscriptDto {
 
     private String name;
     private String state;
-    private ZonedDateTime startTime;
-    private ZonedDateTime endTime;
+    private String startTime;
+    private String endTime;
     private DocsDestination docsDestination;
 
     @Data

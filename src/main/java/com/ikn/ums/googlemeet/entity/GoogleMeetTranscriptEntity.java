@@ -16,16 +16,16 @@ public class GoogleMeetTranscriptEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private Long sid;
 
     private String name;
     private String state;
 
     @Column(name = "start_time")
-    private OffsetDateTime startTime;
+    private String startTime;
 
     @Column(name = "end_time")
-    private OffsetDateTime endTime;
+    private String endTime;
 
     @Column(name = "document_id")
     private String document;
@@ -36,4 +36,6 @@ public class GoogleMeetTranscriptEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "meeting_id")
     private GoogleCompletedMeeting meeting;
+    
+    private String id;
 }

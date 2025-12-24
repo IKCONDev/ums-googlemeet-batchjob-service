@@ -8,13 +8,13 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class CompletedMeetingsDLXConfig {
 
-    @Value("${rabbitmq.dlx.exchange.completed-meetings}")
+    @Value("${rabbitmq.dlx.exchange.googlemeet-completed-meetings}")
     private String dlxExchange;
 
-    @Value("${rabbitmq.dlx.queue.completed-meetings}")
+    @Value("${rabbitmq.dlx.queue.googlemeet-completed-meetings}")
     private String dlxQueue;
 
-    @Value("${rabbitmq.dlx.routing-key.completed-meetings}")
+    @Value("${rabbitmq.dlx.routing-key.googlemeet-completed-meetings}")
     private String dlxRoutingKey;
 
     @Bean

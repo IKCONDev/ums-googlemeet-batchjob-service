@@ -24,5 +24,5 @@ public class GoogleCompletedMeetingAttendeeDto {
     @JsonProperty("responseStatus")
     private String responseStatus;
 
-    private GoogleCompletedMeetingDto meeting; // link to meeting if needed
+    //private GoogleCompletedMeetingDto meeting; // link to meeting if needed
 }

@@ -34,10 +34,10 @@ public class GoogleScheduledMeeting {
             allocationSize = 1
     )
     @GeneratedValue(generator = "google_scheduled_meeting_gen")
-    private Long id;
+    private Long sid;
 
-    @Column(name = "google_event_id", unique = true, nullable = false)
-    private String googleEventId;       
+    //@Column(name = "google_event_id", unique = true, nullable = false)
+    //private String googleEventId;       
     private String summary;           
     private String description;
     private String organizerEmail;
@@ -79,5 +79,7 @@ public class GoogleScheduledMeeting {
     }
     
     private String recurringEventId; 
+    
+    private String id;
 
 }

@@ -57,5 +57,6 @@ public class UMSCompletedMeetingDto {
 	private String departmentName;
 	private String attendee;
 	private long attendeesCount;
+	private String ConferenceRecordId;
 
 }

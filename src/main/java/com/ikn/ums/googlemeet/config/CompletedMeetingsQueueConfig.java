@@ -14,19 +14,19 @@ import com.ikn.ums.googlemeet.constants.RabbitMQConstants;
 @Configuration
 public class CompletedMeetingsQueueConfig {
 
-    @Value("${rabbitmq.exchange.completed-meetings}")
+    @Value("${rabbitmq.exchange.googlemeet-completed-meetings}")
     private String exchangeName;
 
-    @Value("${rabbitmq.queue.completed-meetings}")
+    @Value("${rabbitmq.queue.googlemeet-completed-meetings}")
     private String queueName;
 
-    @Value("${rabbitmq.routing-key.completed-meetings}")
+    @Value("${rabbitmq.routing-key.googlemeet-completed-meetings}")
     private String routingKey;
 
-    @Value("${rabbitmq.dlx.exchange.completed-meetings}")
+    @Value("${rabbitmq.dlx.exchange.googlemeet-completed-meetings}")
     private String dlxExchange;
 
-    @Value("${rabbitmq.dlx.routing-key.completed-meetings}")
+    @Value("${rabbitmq.dlx.routing-key.googlemeet-completed-meetings}")
     private String dlxRoutingKey;
 
     @Bean

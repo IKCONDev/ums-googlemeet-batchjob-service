@@ -1,253 +1,192 @@
 package com.ikn.ums.googlemeet.service.impl;
  
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
  
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.http.*;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
  
+import com.ikn.ums.googlemeet.client.EmployeeServiceClient;
 import com.ikn.ums.googlemeet.dto.GoogleCompletedMeetingDto;
-import com.ikn.ums.googlemeet.dto.GoogleCompletedMeetingParticipantDto;
-import com.ikn.ums.googlemeet.dto.TranscriptDto;
 import com.ikn.ums.googlemeet.entity.GoogleCompletedMeeting;
-import com.ikn.ums.googlemeet.entity.GoogleCompletedMeetingParticipant;
-import com.ikn.ums.googlemeet.entity.GoogleMeetTranscriptEntity;
-import com.ikn.ums.googlemeet.enums.GoogleMeetingType;
-import com.ikn.ums.googlemeet.model.GoogleCompletedMeetingResponse;
-import com.ikn.ums.googlemeet.processor.GoogleCompletedMeetingProcessor;
-import com.ikn.ums.googlemeet.repo.GoogleCompletedMeetingRepository;
+import com.ikn.ums.googlemeet.externaldto.EmployeeDto;
+import com.ikn.ums.googlemeet.externaldto.UMSCompletedMeetingDto;
+import com.ikn.ums.googlemeet.mapper.GoogleMeetingMapper;
+import com.ikn.ums.googlemeet.service.GoogleAsyncService;
 import com.ikn.ums.googlemeet.service.GoogleCompletedMeetingService;
-import com.ikn.ums.googlemeet.utils.InitializeGoogleOAuth;
+import com.ikn.ums.googlemeet.service.GoogleMeetingPersistenceService;
+import com.ikn.ums.googlemeet.service.GoogleMeetingsQueuePublisherService;
+import com.ikn.ums.zoom.utils.AbstractBatchExecutor; // Assuming batch executor is generic
  
-import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
  
-@Service
+/**
+* Service implementation for processing Google Meet meetings.
+* Handles API calls, async execution, retries, DTO/entity mapping,
+* and persistence of meeting data.
+*/
 @Slf4j
-public class GoogleCompletedMeetingServiceImpl implements GoogleCompletedMeetingService {
+@Service
+public class GoogleCompletedMeetingServiceImpl extends AbstractBatchExecutor implements GoogleCompletedMeetingService {
  
     @Autowired
-    private InitializeGoogleOAuth initializeGoogleOAuth;
+    private EmployeeServiceClient employeeServiceClient;
  
     @Autowired
-    private GoogleCompletedMeetingRepository googleMeetingRepository;
- 
-    @Autowired
-    @Qualifier("googleRestTemplate")
-    private RestTemplate restTemplate;
+    private GoogleMeetingMapper googleMeetingMapper;
     
     @Autowired
-    private GoogleCompletedMeetingProcessor meetingProcessor;
- 
- 
+    private GoogleMeetingPersistenceService googleMeetingPersistenceService;
+    
+    @Autowired
+    private GoogleMeetingsQueuePublisherService meetingsQueuePublisherService;
+    
+    @Autowired
+    private GoogleAsyncService googleAsyncService;
+    
+    private static final int BATCH_SIZE = 20;
+    
     @Override
     public List<GoogleCompletedMeetingDto> performMeetingsRawDataBatchProcessing() {
  
-        List<String> emailIds = List.of("ums-test@ikcontech.com");
+        final String methodName = "performMeetingsRawDataBatchProcessing()";
+        log.info("{} - STARTED", methodName);
  
-        List<CompletableFuture<List<GoogleCompletedMeetingDto>>> futures =
-                emailIds.stream()
-                        .map(this::getEventsAsync)
-                        .toList();
+        List<EmployeeDto> employeeList =
+                employeeServiceClient.getEmployeesListFromEmployeeService();
  
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-       
-        List<GoogleCompletedMeetingDto> completedMeetings =
-                futures.stream()
-                        .flatMap(f -> f.join().stream())
-                        .toList();
+        log.info("{} - Fetched employee list - count={}",
+                methodName, employeeList != null ? employeeList.size() : 0);
  
-        // Delegate business logic to processor
-        completedMeetings = meetingProcessor.preProcess(completedMeetings);
-        completedMeetings = completedMeetings.stream()
-                .map(meetingProcessor::attachConferenceData)
-                .toList();
+        if (employeeList == null || employeeList.isEmpty()) {
+            log.warn("{} - No employees found. Skipping processing.", methodName);
+            return Collections.emptyList();
+        }
  
+        List<String> emailIds = employeeList.stream()
+                .map(EmployeeDto::getEmail)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
  
-        List<GoogleCompletedMeeting> entities =
-                completedMeetings.stream()
-                        .map(this::mapToEntity)
-                        .toList();
+        log.info("{} - Prepared emailIds list - count={}", methodName, emailIds.size());
  
-        persistCompletedMeetings(entities);
- 
-        log.info("Completed meetings saved/updated: {}", entities.size());
- 
-        return completedMeetings;
-    }
- 
-    private GoogleCompletedMeeting mapToEntity(GoogleCompletedMeetingDto dto) {
- 
-        GoogleCompletedMeeting meeting = new GoogleCompletedMeeting();
- 
-        meeting.setGoogleEventId(dto.getId());
-        meeting.setSummary(dto.getSummary());
-        meeting.setDescription(dto.getDescription());
-        meeting.setHangoutLink(dto.getHangoutLink());
-        meeting.setStartTime(dto.getStartTime());
-        meeting.setEndTime(dto.getEndTime());
- 
-      
-        meeting.setMeetingType(
-                GoogleMeetingType.valueOf(dto.getMeetingType())
-        );
+        List<List<String>> emailBatches =
+                partition(emailIds, BATCH_SIZE);
         
-     // Participants
-        if (dto.getParticipants() != null) {
-            dto.getParticipants().forEach(p -> {
-                GoogleCompletedMeetingParticipant entity =
-                        mapParticipant(p);
-                entity.setMeeting(meeting);
-                meeting.getParticipants().add(entity);
-            });
-        }
+        log.info("{} - Partitioned {} users into {} batch(es) with batchSize={}",
+                methodName,
+                emailIds.size(),
+                emailBatches.size(),
+                BATCH_SIZE);
+        
+        List<GoogleCompletedMeetingDto> masterList =
+        		executeInBatches(emailBatches,
+        				googleAsyncService::getCompletedMeetingsAsync,
+        				"CompletedMeetingsBatch");
+ 
+        log.info("{} - All batches completed. Total meetings fetched={}",
+                methodName, masterList.size());
+ 
+        List<GoogleCompletedMeeting> meetingEntities =
+                googleMeetingMapper.toGoogleCompletedEntityList(masterList);
+        
+//     // 1️⃣ Map DTOs to entities
+//        List<GoogleCompletedMeeting> meetingEntities =
+//                googleMeetingMapper.toGoogleCompletedEntityList(masterList);
 
-        // Transcripts
-        if (dto.getTranscripts() != null) {
-            dto.getTranscripts().forEach(t -> {
-                GoogleMeetTranscriptEntity entity =
-                        mapTranscript(t);
-                entity.setMeeting(meeting);
-                meeting.getTranscripts().add(entity);
-            });
+        // 2️⃣ REMOVE DUPLICATES based on meeting ID or conferenceRecordId
+        Map<String, GoogleCompletedMeeting> uniqueMeetings = new LinkedHashMap<>();
+        for (GoogleCompletedMeeting m : meetingEntities) {
+            if (m.getId() != null) {
+                uniqueMeetings.putIfAbsent(m.getId(), m);
+            } else if (m.getConferenceRecordId() != null) {
+                uniqueMeetings.putIfAbsent(m.getConferenceRecordId(), m);
+            }
         }
+        List<GoogleCompletedMeeting> dedupedMeetings = new ArrayList<>(uniqueMeetings.values());
+
+        // 3️⃣ Link child entities
+        linkMeetingToChildEntities(dedupedMeetings);
+
+        // 4️⃣ Persist deduplicated meetings
+        List<GoogleCompletedMeeting> savedMeetings =
+                googleMeetingPersistenceService.persistCompletedMeetings(dedupedMeetings);
 
  
-        return meeting;
+        log.info("{} - Mapped DTO to entity list - count={}",
+                methodName, meetingEntities.size());
+ 
+        linkMeetingToChildEntities(meetingEntities);
+        log.info("{} - Linked meeting objects to child entities", methodName);
+ 
+//        List<GoogleCompletedMeeting> savedMeetings =
+//                googleMeetingPersistenceService.persistCompletedMeetings(meetingEntities);
+ 
+        log.info("{} - Persisted completed meetings - savedCount={}",
+                methodName, savedMeetings.size());
+ 
+        List<GoogleCompletedMeetingDto> finalDtoList =
+                googleMeetingMapper.toGoogleCompletedDtoList(savedMeetings);
+ 
+        log.info("{} - Mapped saved entities to DTO list - count={}",
+                methodName, finalDtoList.size());
+ 
+        List<UMSCompletedMeetingDto> umsDtoList =
+                googleMeetingMapper.toUMSCompletedDtoList(finalDtoList);
+ 
+        meetingsQueuePublisherService
+                .publishCompletedMeetingsBatchEventInQueue(umsDtoList);
+ 
+        log.info("{} - CompletedMeetingsBatchEvent published - recordCount={}",
+                methodName, umsDtoList.size());
+ 
+        log.info("{} - COMPLETED. Total meetings saved={}",
+                methodName, finalDtoList.size());
+ 
+        return finalDtoList;
     }
  
-    @Transactional
-    private void persistCompletedMeetings(List<GoogleCompletedMeeting> meetings) {
+    
+    /**
+     * Links each meeting entity to its child entities (attendees, participants, transcripts)
+     * for proper JPA persistence.
+     */
+    private void linkMeetingToChildEntities(List<GoogleCompletedMeeting> meetings) {
+ 
+        final String methodName = "linkMeetingToChildEntities()";
+ 
+        if (meetings == null || meetings.isEmpty()) {
+            log.info("{} - No meeting entities to link.", methodName);
+            return;
+        }
+ 
+        log.info("{} - Linking child entities for {} meetings", methodName, meetings.size());
  
         for (GoogleCompletedMeeting meeting : meetings) {
  
-            GoogleCompletedMeeting existing =
-                    googleMeetingRepository
-                            .findByGoogleEventId(meeting.getGoogleEventId())
-                            .orElse(null);
+            if (meeting.getAttendees() != null && !meeting.getAttendees().isEmpty()) {
+                meeting.getAttendees().forEach(a -> a.setMeeting(meeting));
+            }
  
-            if (existing == null) {
-                // INSERT
-                googleMeetingRepository.save(meeting);
-            } else {
-                // UPDATE
-                existing.setMeetingType(meeting.getMeetingType());
-                existing.setSummary(meeting.getSummary());
-                existing.setDescription(meeting.getDescription());
-                existing.setStartTime(meeting.getStartTime());
-                existing.setEndTime(meeting.getEndTime());
-                existing.setHangoutLink(meeting.getHangoutLink());
-                
-                existing.getParticipants().clear();
-                existing.getTranscripts().clear();
-
-                // Add new children
-                meeting.getParticipants().forEach(p -> p.setMeeting(existing));
-                meeting.getTranscripts().forEach(t -> t.setMeeting(existing));
-
-                existing.getParticipants().addAll(meeting.getParticipants());
-                existing.getTranscripts().addAll(meeting.getTranscripts());
- 
-                googleMeetingRepository.save(existing);
+            if (meeting.getParticipants() != null && !meeting.getParticipants().isEmpty()) {
+                meeting.getParticipants().forEach(p -> p.setMeeting(meeting));
+            }
+            
+            if (meeting.getTranscripts() != null && !meeting.getTranscripts().isEmpty()) {
+            	meeting.getTranscripts().forEach(t -> t.setMeeting(meeting));
             }
         }
-    }
  
- 
-    @Async("googleMeetExecutor")
-    public CompletableFuture<List<GoogleCompletedMeetingDto>> getEventsAsync(String userEmail) {
-        return CompletableFuture.completedFuture(getEvents(userEmail));
-    }
- 
-    private List<GoogleCompletedMeetingDto> getEvents(String userEmail) {
- 
-        try {
-            String token = initializeGoogleOAuth.getAccessTokenString();
- 
-            String url = initializeGoogleOAuth.getBaseUrl()
-                    + "/calendars/" + userEmail
-                    + "/events?conferenceDataVersion=1";
- 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(token);
- 
-            ResponseEntity<GoogleCompletedMeetingResponse> response =
-                    restTemplate.exchange(
-                            url,
-                            HttpMethod.GET,
-                            new HttpEntity<>(headers),
-                            GoogleCompletedMeetingResponse.class
-                    );
- 
-            return response.getBody() != null
-                    ? response.getBody().getItems()
-                    : Collections.emptyList();
- 
-        } catch (Exception e) {
-            log.error("Error fetching events for {}", userEmail, e);
-            return Collections.emptyList();
-        }
+        log.info("{} - Linking completed.", methodName);
     }
     
-    private GoogleCompletedMeetingParticipant mapParticipant(
-            GoogleCompletedMeetingParticipantDto dto) {
-
-        GoogleCompletedMeetingParticipant entity =
-                new GoogleCompletedMeetingParticipant();
-
-        entity.setName(dto.getName());
-
-        if (dto.getSignedinUser() != null) {
-            entity.setUserId(dto.getSignedinUser().getUser());
-            entity.setDisplayName(dto.getSignedinUser().getDisplayName());
-        }
-
-        if (dto.getEarliestStartTime() != null) {
-            entity.setEarliestStartTime(
-                    OffsetDateTime.parse(dto.getEarliestStartTime())
-            );
-        }
-
-        if (dto.getLatestEndTime() != null) {
-            entity.setLatestEndTime(
-                    OffsetDateTime.parse(dto.getLatestEndTime())
-            );
-        }
-
-        return entity;
-    }
-
     
-    private GoogleMeetTranscriptEntity mapTranscript(TranscriptDto dto) {
-
-        GoogleMeetTranscriptEntity entity =
-                new GoogleMeetTranscriptEntity();
-
-        entity.setName(dto.getName());
-        entity.setState(dto.getState());
-        if (dto.getStartTime() != null) {
-            entity.setStartTime(dto.getStartTime().toOffsetDateTime());
-        }
-
-        if (dto.getEndTime() != null) {
-            entity.setEndTime(dto.getEndTime().toOffsetDateTime());
-        }
-
-        if (dto.getDocsDestination() != null) {
-            entity.setDocument(dto.getDocsDestination().getDocument());
-            entity.setExportUri(dto.getDocsDestination().getExportUri());
-        }
-
-        return entity;
-    }
-
 }
  
  

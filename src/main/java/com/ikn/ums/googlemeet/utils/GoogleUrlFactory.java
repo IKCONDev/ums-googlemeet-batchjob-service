@@ -57,6 +57,12 @@ public class GoogleUrlFactory {
     private String transcriptsUrl;
     
     
+    
+    @Value("${google.driveBaseUrl}")
+    private String driveBaseUrl;   // https://www.googleapis.com/drive/v3
+
+    
+    
 
 
     /**
@@ -86,21 +92,38 @@ public class GoogleUrlFactory {
      * Google Endpoint:
      *   GET /calendars/{calendarId}/events?timeMin=&timeMax=
      */
-    public String buildCompletedMeetingsUrl(String calendarId, LocalDate fromDate) {
+//    public String buildCompletedMeetingsUrl(String calendarId, LocalDate fromDate) {
+//
+//        String fromUtc = fromDate.atStartOfDay(ZoneOffset.UTC)
+//                .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+//
+//        String toUtc = ZonedDateTime.now(ZoneOffset.UTC)
+//                .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+//
+//        Map<String, String> values = new HashMap<>();
+//        values.put("calendarId", calendarId);
+//        values.put("fromUtc", fromUtc);
+//        values.put("toUtc", toUtc);
+//
+//        return UrlBuilderUtil.buildUrl(completedMeetingsUrl, values);
+//    }
+    
+    public String buildCompletedMeetingsUrl(String calendarId) {
 
-        String fromUtc = fromDate.atStartOfDay(ZoneOffset.UTC)
-                .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+        // Current UTC time
+        ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
 
-        String toUtc = ZonedDateTime.now(ZoneOffset.UTC)
-                .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+        // Define past period, e.g., 7 days ago
+        ZonedDateTime sevenDaysAgo = now.minusDays(7);
 
         Map<String, String> values = new HashMap<>();
         values.put("calendarId", calendarId);
-        values.put("fromUtc", fromUtc);
-        values.put("toUtc", toUtc);
+        values.put("timeMin", sevenDaysAgo.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
+        values.put("timeMax", now.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
 
         return UrlBuilderUtil.buildUrl(completedMeetingsUrl, values);
     }
+
 
 
     /**
@@ -191,6 +214,23 @@ public class GoogleUrlFactory {
                 "conferenceRecordId", conferenceRecordId
         );
         return UrlBuilderUtil.buildUrl(transcriptsUrl, values);
+    }
+
+    
+    
+    
+    /**
+     * Builds URL to export Google Docs transcript as plain text.
+     *
+     * Google Drive Endpoint:
+     *   GET /drive/v3/files/{fileId}/export?mimeType=text/plain
+     */
+    public String buildPlainTranscriptExportUrl(String documentId) {
+
+        return driveBaseUrl
+                + "/files/"
+                + documentId
+                + "/export?mimeType=text/plain";
     }
 
     

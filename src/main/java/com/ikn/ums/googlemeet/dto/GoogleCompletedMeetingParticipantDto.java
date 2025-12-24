@@ -15,8 +15,8 @@ public class GoogleCompletedMeetingParticipantDto {
 
     private String name; 
 
-    @JsonProperty("signedinUser")
-    private SignedInUser signedinUser; 
+    @JsonProperty("signedInUser")
+    private SignedInUserDto signedinUser; 
 
     @JsonProperty("earliestStartTime")
     private String earliestStartTime;
@@ -24,12 +24,12 @@ public class GoogleCompletedMeetingParticipantDto {
     @JsonProperty("latestEndTime")
     private String latestEndTime;
 
-    @Getter
-    @Setter
-    @AllArgsConstructor
-    @NoArgsConstructor
-    public static class SignedInUser {
-        private String user;         
-        private String displayName;  
-    }
+//    @Getter
+//    @Setter
+//    @AllArgsConstructor
+//    @NoArgsConstructor
+//    public static class SignedInUser {
+//        private String user;         
+//        private String displayName;  
+//    }
 }

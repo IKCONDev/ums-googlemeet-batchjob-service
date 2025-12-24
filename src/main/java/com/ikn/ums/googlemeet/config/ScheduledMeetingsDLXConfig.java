@@ -8,13 +8,13 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class ScheduledMeetingsDLXConfig {
 
-    @Value("${rabbitmq.dlx.exchange.scheduled-meetings}")
+    @Value("${rabbitmq.dlx.exchange.googlemeet-scheduled-meetings}")
     private String dlxExchange;
 
-    @Value("${rabbitmq.dlx.queue.scheduled-meetings}")
+    @Value("${rabbitmq.dlx.queue.googlemeet-scheduled-meetings}")
     private String dlxQueue;
 
-    @Value("${rabbitmq.dlx.routing-key.scheduled-meetings}")
+    @Value("${rabbitmq.dlx.routing-key.googlemeet-scheduled-meetings}")
     private String dlxRoutingKey;
 
     @Bean

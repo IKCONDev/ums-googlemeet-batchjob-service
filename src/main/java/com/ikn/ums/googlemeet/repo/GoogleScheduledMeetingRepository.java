@@ -20,9 +20,9 @@ public interface GoogleScheduledMeetingRepository extends JpaRepository<GoogleSc
     
     
     // NEW: check if a Google event already exists
-       boolean existsBygoogleEventId(String googleEventId);
+       //boolean existsBygoogleEventId(String googleEventId);
        
-       Optional<GoogleScheduledMeeting> findByGoogleEventId(String googleEventId);
+      // Optional<GoogleScheduledMeeting> findByGoogleEventId(String googleEventId);
        
        @Modifying
        @Query(value = "ALTER SEQUENCE google_scheduled_meeting_attendee_seq RESTART WITH 1", nativeQuery = true)

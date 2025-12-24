@@ -111,9 +111,10 @@ public class GoogleAsyncServiceImpl implements GoogleAsyncService {
                     .filterAlreadyProcessed()
                     .classifyType()
                     .enrichData()
+                    .attachConferenceData()
                     .attachInvitees()
                     .attachParticipants()
-                   //.attachTranscripts()
+                    .attachTranscripts()
                     .done();
 
             log.info("getCompletedMeetings() - Pipeline completed successfully for userId={}", userId);

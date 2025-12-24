@@ -1,5 +1,7 @@
 package com.ikn.ums.googlemeet.entity;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
+
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
@@ -27,7 +29,7 @@ public class GoogleCompletedMeetingAttendee {
             allocationSize = 1
     )
     @GeneratedValue(generator = "google_meeting_attendee_gen")
-    private Long id;
+    private Long sid;
 
     private String email;
 
@@ -37,7 +39,17 @@ public class GoogleCompletedMeetingAttendee {
 
     private String responseStatus; 
 
+//    @ManyToOne
+//    @JoinColumn(name = "meeting_id", nullable = false)
+//    private GoogleCompletedMeeting meeting;
+    
+    private String id;
+    
     @ManyToOne
-    @JoinColumn(name = "meeting_id", nullable = false)
+    @JoinColumn(name = "meeting_id")
+    @JsonBackReference
     private GoogleCompletedMeeting meeting;
+
+    
+    
 }

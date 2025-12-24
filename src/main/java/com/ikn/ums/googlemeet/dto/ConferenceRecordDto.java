@@ -26,6 +26,7 @@ public class ConferenceRecordDto {
 	 @JsonProperty("space")
 	 private String space;
 	 
+	 private String id ;
 	 private List<GoogleCompletedMeetingParticipantDto> participants = new ArrayList<>();
 
 	 private List<TranscriptDto> transcripts = new ArrayList<>();

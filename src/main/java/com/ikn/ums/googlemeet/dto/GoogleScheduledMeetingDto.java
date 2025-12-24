@@ -23,7 +23,7 @@ public class GoogleScheduledMeetingDto {
     private String timezone;             
     private EventTime start;             
     private EventTime end;  
-    private String googleEventId;        
+    //private String googleEventId;        
 
     @Data
     @AllArgsConstructor
@@ -63,6 +63,11 @@ public class GoogleScheduledMeetingDto {
     private String insertedDate = LocalDateTime.now().toString();
     
     private List<GoogleScheduledMeetingAttendeeDto> attendees;
+    
+    private Long sid;
+    
+    
+    
 
 }
 

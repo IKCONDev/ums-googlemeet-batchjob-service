@@ -101,7 +101,7 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
     public List<GoogleScheduledMeetingDto> fetchScheduledMeetings(String userEmail) {
 
         try {
-            String url = googleUrlFactory.buildUpcomingMeetingsUrl("primary");
+            String url = googleUrlFactory.buildUpcomingMeetingsUrl(userEmail);
 
             ResponseEntity<GoogleScheduledMeetingResponse> response =
                     restTemplate.exchange(
@@ -123,25 +123,28 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
 
     @Override
     public List<GoogleCompletedMeetingDto> fetchCompletedMeetings(String userEmail) {
-
         try {
-            String url = googleUrlFactory.buildCompletedMeetingsUrl(
-                    "primary", LocalDate.now().minusDays(2));
+            // Fetch events from 2 days ago until now
+            LocalDate fromDate = LocalDate.now().minusDays(2);
 
-            ResponseEntity<GoogleCompletedMeetingResponse> response =
-                    restTemplate.exchange(
-                            url,
-                            HttpMethod.GET,
-                            new HttpEntity<>(getHeaders()),
-                            GoogleCompletedMeetingResponse.class
-                    );
+            String url = googleUrlFactory.buildCompletedMeetingsUrl(userEmail);
+
+            // Optional: Add query params directly if your UrlBuilder doesn't handle them
+            url += "&singleEvents=true&orderBy=startTime";
+
+            ResponseEntity<GoogleCompletedMeetingResponse> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    new HttpEntity<>(getHeaders()),
+                    GoogleCompletedMeetingResponse.class
+            );
 
             return response.getBody() != null
                     ? response.getBody().getItems()
                     : Collections.emptyList();
 
         } catch (Exception ex) {
-            log.error("fetchCompletedMeetings error", ex);
+            log.error("fetchCompletedMeetings error for user " + userEmail, ex);
             return Collections.emptyList();
         }
     }
@@ -294,6 +297,29 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
             return Collections.emptyList();
         }
     }
+    
+    
+    @Override
+    public String fetchPlainTranscriptText(String documentId) {
+        try {
+            String url = googleUrlFactory.buildPlainTranscriptExportUrl(documentId);
+
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    new HttpEntity<>(getHeaders()),
+                    String.class
+            );
+
+            return response.getBody();
+
+        } catch (Exception ex) {
+            log.error("Error fetching plain transcript for documentId {}: {}", documentId, ex.getMessage(), ex);
+            return null;
+        }
+    }
+
+
 
    
 }

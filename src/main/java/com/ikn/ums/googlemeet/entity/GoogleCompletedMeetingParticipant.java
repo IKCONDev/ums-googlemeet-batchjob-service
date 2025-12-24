@@ -1,37 +1,47 @@
 package com.ikn.ums.googlemeet.entity;
 
-import java.time.OffsetDateTime;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
+import jakarta.persistence.Embeddable;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.Table;
 
-import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
-
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
+import lombok.Setter;
 @Entity
-@Table(name = "google_meeting_participants")
+@Table(name = "google_completed_meeting_participant")
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
 public class GoogleCompletedMeetingParticipant {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "participant_name")
+    @Column(name = "name")
     private String name;
 
-    @Column(name = "user_id")
-    private String userId;
-
-    @Column(name = "display_name")
-    private String displayName;
+    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @JoinColumn(name = "signed_in_user_id")
+    private SignedInUserEntity signedInUser;
 
     @Column(name = "earliest_start_time")
-    private OffsetDateTime earliestStartTime;
+    private String earliestStartTime;
 
     @Column(name = "latest_end_time")
-    private OffsetDateTime latestEndTime;
+    private String latestEndTime;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "meeting_id")

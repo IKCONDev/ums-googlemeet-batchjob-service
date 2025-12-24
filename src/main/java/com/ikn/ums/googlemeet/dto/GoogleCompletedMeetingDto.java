@@ -3,8 +3,7 @@ package com.ikn.ums.googlemeet.dto;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import com.ikn.ums.zoom.dto.ZoomCompletedMeetingParticipantDto;
-import com.ikn.ums.zoom.dto.ZoomTranscriptMetadataDto;
+
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -29,7 +28,7 @@ public class GoogleCompletedMeetingDto {
     private String timezone;             
     private EventTime start;             
     private EventTime end;  
-    private String googleEventId; 
+    //private String googleEventId; 
 
     @Data
     @AllArgsConstructor
@@ -75,5 +74,12 @@ public class GoogleCompletedMeetingDto {
     private List<TranscriptDto> transcripts;
     
     private String conferenceRecordId;
+    
+    // Drive API plain text
+    private List<PlainTranscriptDto> plainTranscripts;
+    
+    private Long sid;
+    
+    
     
 }

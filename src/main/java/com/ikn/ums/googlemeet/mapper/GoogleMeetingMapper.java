@@ -155,7 +155,9 @@ public class GoogleMeetingMapper {
         UMSScheduledMeetingDto ums = new UMSScheduledMeetingDto();
 
         ums.setMeetingId(null);
-        ums.setEventId(googleDto.getGoogleEventId());
+        ums.setEventId(
+        	        googleDto.getId()
+        	);
         ums.setCreatedDateTime(googleDto.getCreatedAt());
         ums.setOriginalStartTimeZone(googleDto.getTimezone());
         ums.setOriginalEndTimeZone(googleDto.getTimezone());
@@ -167,7 +169,7 @@ public class GoogleMeetingMapper {
         ums.setEndTimeZone(googleDto.getTimezone());
         ums.setLocation(googleDto.getLocation());
         ums.setOrganizerEmailId(googleDto.getOrganizerEmail());
-        ums.setOnlineMeetingId(googleDto.getGoogleEventId());
+        ums.setOnlineMeetingId(googleDto.getId());
         ums.setOnlineMeetingProvider("GOOGLE_MEET");
         ums.setSeriesMasterId(googleDto.getRecurringEventId());
         ums.setJoinUrl(googleDto.getHangoutLink());
@@ -261,6 +263,12 @@ public class GoogleMeetingMapper {
         ums.setModifiedDateTime(LocalDateTime.now());
         ums.setCreatedBy("AUTO-BATCH-PROCESS");
         ums.setModifiedBy("AUTO-BATCH-PROCESS");
+        
+        
+        
+        
+        
+        
 
         // Map attendees (invited emails)
         if (googleDto.getAttendees() != null && !googleDto.getAttendees().isEmpty()) {
@@ -336,48 +344,62 @@ public class GoogleMeetingMapper {
             GoogleCompletedMeetingParticipantDto p) {
 
         UMSAttendanceRecordDto record = new UMSAttendanceRecordDto();
-        record.setEmailAddress(p.getSignedinUser().getUser());
+
+        // Safe signedinUser mapping
+        if (p.getSignedinUser() != null) {
+            record.setEmailAddress(p.getSignedinUser().getUser());
+        } else if (p.getName() != null) {
+            record.setEmailAddress(p.getName()); // fallback to name if userId is missing
+        } else {
+            record.setEmailAddress("UNKNOWN");
+        }
+
         record.setMeetingRole("Attendee");
 
-        // Calculate duration in seconds
+        // Calculate duration in seconds safely
         long durationInSeconds = 0;
-        if (p.getEarliestStartTime() != null && p.getLatestEndTime() != null) {
-            durationInSeconds = java.time.Duration.between(
-                    OffsetDateTime.parse(p.getEarliestStartTime()),
-                    OffsetDateTime.parse(p.getLatestEndTime())
-            ).getSeconds();
-        }
-        //record.setTotalAttendanceInSeconds(durationInSeconds);
+        if (p.getEarliestStartTime() != null && !p.getEarliestStartTime().isBlank() &&
+            p.getLatestEndTime() != null && !p.getLatestEndTime().isBlank()) {
 
-        // Create a single interval
+            OffsetDateTime start = OffsetDateTime.parse(p.getEarliestStartTime());
+            OffsetDateTime end = OffsetDateTime.parse(p.getLatestEndTime());
+            durationInSeconds = java.time.Duration.between(start, end).getSeconds();
+        }
+
+        // Single interval
         UMSAttendanceIntervalDto interval = new UMSAttendanceIntervalDto();
-        interval.setJoinDateTime(p.getEarliestStartTime());
-        interval.setLeaveDateTime(p.getLatestEndTime());
+        interval.setJoinDateTime(p.getEarliestStartTime() != null ? p.getEarliestStartTime() : "UNKNOWN");
+        interval.setLeaveDateTime(p.getLatestEndTime() != null ? p.getLatestEndTime() : "UNKNOWN");
         //interval.setAttendeeDurationInSeconds(durationInSeconds);
 
         record.setAttendanceIntervals(List.of(interval));
+
         return record;
     }
 
+
     private UMSAttendanceReportDto buildGoogleAttendanceReport(GoogleCompletedMeetingDto google) {
         UMSAttendanceReportDto report = new UMSAttendanceReportDto();
-        report.setMeetingStartDateTime(google.getStartTime());
-        report.setMeetingEndDateTime(google.getEndTime());
+        report.setMeetingStartDateTime(
+                google.getStartTime() != null ? google.getStartTime() : "UNKNOWN");
+        report.setMeetingEndDateTime(
+                google.getEndTime() != null ? google.getEndTime() : "UNKNOWN");
 
-//        if (google.getParticipants() != null && !google.getParticipants().isEmpty()) {
-//            List<UMSAttendanceRecordDto> records = google.getParticipants()
-//                    .stream()
-//                    .map(this::mapGoogleParticipantToAttendanceRecord)
-//                    .collect(Collectors.toList());
-//            report.setAttendanceRecords(records);
-//            report.setTotalParticipantCount(String.valueOf(records.size()));
-//        } else {
-//            report.setAttendanceRecords(Collections.emptyList());
-//            report.setTotalParticipantCount("0");
-//        }
+        if (google.getParticipants() != null && !google.getParticipants().isEmpty()) {
+            List<UMSAttendanceRecordDto> records = google.getParticipants()
+                    .stream()
+                    .map(this::mapGoogleParticipantToAttendanceRecord)
+                    .collect(Collectors.toList());
+            report.setAttendanceRecords(records);
+            report.setTotalParticipantCount(String.valueOf(records.size()));
+        } else {
+            report.setAttendanceRecords(Collections.emptyList());
+            report.setTotalParticipantCount("0");
+        }
 
         return report;
     }
+
 
    
     public GoogleScheduledMeetingDto cloneScheduledMeeting(GoogleScheduledMeetingDto source) {
@@ -390,50 +412,44 @@ public class GoogleMeetingMapper {
 
     
     private LocalDateTime parseGoogleDateTime(String value) {
+
+        if (value == null || value.isBlank()) {
+            return null;   // ✅ prevents NullPointerException
+        }
+
         return OffsetDateTime.parse(value).toLocalDateTime();
     }
+
     
     private UMSTranscriptDto mapTranscript(TranscriptDto t) {
         UMSTranscriptDto dto = new UMSTranscriptDto();
-        if (t == null) {
-            return dto;
-        }
+        if (t == null) return dto;
 
-        dto.setId(null);
+        // Use transcript name as ID
+        dto.setTranscriptId(t.getName());
 
-        // Use the transcript name as the ID (or generate one if needed)
-        dto.setTranscriptId(t.getName() != null ? t.getName() : null);
-
-        // Meeting info
+        // Transcript content URL
         if (t.getDocsDestination() != null) {
-            // Assuming document/exportUri can provide reference to meeting or organizer
-            dto.setMeetingId(null); // you can set this from GoogleCompletedMeetingDto
-            dto.setMeetingOrganizerId(null); // populate from meeting organizer if needed
             dto.setTranscriptContentUrl(t.getDocsDestination().getExportUri());
+
+            // File name extraction
+//            String downloadUrl = t.getDocsDestination().getExportUri();
+//            int idx = downloadUrl.lastIndexOf('/');
+//            dto.setTranscriptFilePath(idx != -1 ? downloadUrl.substring(idx + 1) : downloadUrl);
         } else {
             dto.setTranscriptContentUrl(null);
-        }
-
-        dto.setCreatedDateTime(t.getStartTime() != null ? t.getStartTime().toString() : null);
-
-        // File path (optional)
-        if (t.getDocsDestination() != null && t.getDocsDestination().getExportUri() != null) {
-            String downloadUrl = t.getDocsDestination().getExportUri();
-            int idx = downloadUrl.lastIndexOf('/');
-            if (idx != -1 && idx + 1 < downloadUrl.length()) {
-                dto.setTranscriptFilePath(downloadUrl.substring(idx + 1));
-            } else {
-                dto.setTranscriptFilePath(downloadUrl);
-            }
-        } else {
             dto.setTranscriptFilePath(null);
         }
 
-        // Transcript content
-        dto.setTranscriptContent(null); // Google Meet transcript text may not be in API response; usually stored in document
+        // Created timestamp
+        dto.setCreatedDateTime(t.getStartTime() != null ? t.getStartTime().toString() : null);
+
+        // Transcript content placeholder (fetch separately if needed)
+        dto.setTranscriptContent(null);
 
         return dto;
     }
+
 
 
 }

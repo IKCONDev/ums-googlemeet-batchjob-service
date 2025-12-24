@@ -67,6 +67,16 @@ public class MeetingPipeline<T> {
     }
     
     
+    
+    public MeetingPipeline<T> attachConferenceData() {
+        this.meetings = meetings.stream()
+                .map(m -> processor.attachConferenceData(m))
+                .collect(Collectors.toList());
+        return this;
+    }
+
+    
+    
     /**
      * Attaches participants  information to each meeting in the pipeline.
      *
@@ -84,6 +94,15 @@ public class MeetingPipeline<T> {
                 .collect(Collectors.toList());
         return this;
     }
+    
+    
+    public MeetingPipeline<T> attachTranscripts() {
+        this.meetings = meetings.stream()
+                .map(processor::attachTranscripts)
+                .collect(Collectors.toList());
+        return this;
+    }
+
     
     /**
      * Enriches each meeting DTO with additional metadata retrieved from external sources

@@ -40,6 +40,12 @@ public interface MeetingProcessor<T> {
      * @return the enriched meeting DTO
      */
     T attachInvitees(T meeting);
+    
+    
+    
+    
+    T attachConferenceData(T meeting) ;
+    
 
     /**
      * Attaches participant details to the given Google Meet meeting.
