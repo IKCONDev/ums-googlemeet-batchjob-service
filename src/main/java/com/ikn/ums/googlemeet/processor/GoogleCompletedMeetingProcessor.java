@@ -48,61 +48,21 @@ public class GoogleCompletedMeetingProcessor
 
     @Override
     public List<GoogleCompletedMeetingDto> preProcess(List<GoogleCompletedMeetingDto> meetings) {
+        log.info("preProcess() called with {} meetings", meetings != null ? meetings.size() : 0);
 
-        List<GoogleCompletedMeetingDto> result = new ArrayList<>();
-
-        log.info("preProcess() -> Starting preprocessing for {} completed meetings", meetings.size());
-
-        for (GoogleCompletedMeetingDto meeting : meetings) {
-
-            log.info("preProcess() -> Processing eventId={}, recurringEventId={}",
-                    meeting.getEventid(), meeting.getRecurringEventId());
-
-            // RECURRING — expand instances
-            if (meeting.getRecurringEventId() != null) {
-
-                log.info("preProcess() -> Fetching recurring instances for recurringEventId={}",
-                        meeting.getRecurringEventId());
-
-                List<GoogleRecurringInstanceDto> instances =
-                        googleCalendarService.fetchRecurringInstances(meeting.getRecurringEventId());
-
-                if (instances == null || instances.isEmpty()) {
-                    log.warn("preProcess() -> No instances found for recurringEventId={} -> Skipping",
-                            meeting.getRecurringEventId());
-                    continue;
-                }
-
-                for (GoogleRecurringInstanceDto occ : instances) {
-                	
-                	
-
-                    GoogleCompletedMeetingDto clone =
-                            googlemeetingmapper.cloneCompletedMeeting(meeting);
-                    
-                    
-
-                    clone.setStart(new GoogleCompletedMeetingDto.EventTime(
-                            occ.getStart().getDateTime(), occ.getStart().getTimeZone()));
-                    clone.setEnd(new GoogleCompletedMeetingDto.EventTime(
-                            occ.getEnd().getDateTime(), occ.getEnd().getTimeZone()));
-                    clone.setRecurringEventId(meeting.getRecurringEventId());
-
-                    result.add(clone);
-
-                    log.info("preProcess() -> Added expanded occurrence -> instanceEventId={}", occ.getInstanceEventId());
-                }
-
-            } else {
-                // NON-RECURRING
-                log.info("preProcess() -> Non-recurring meeting -> Added directly, eventId={}",
-                        meeting.getEventid());
-                result.add(meeting);
-            }
+        if (meetings == null) {
+            log.warn("Received null meetings list in preProcess(), returning empty list");
+            return Collections.emptyList();
         }
 
-        log.info("preProcess() -> Preprocessing completed -> Total output meetings={}", result.size());
-        return result;
+        if (meetings.isEmpty()) {
+            log.info("Received empty meetings list, nothing to process");
+            return Collections.emptyList();
+        }
+
+        log.info("Processing {} meetings", meetings.size());
+
+        return meetings;
     }
 
 

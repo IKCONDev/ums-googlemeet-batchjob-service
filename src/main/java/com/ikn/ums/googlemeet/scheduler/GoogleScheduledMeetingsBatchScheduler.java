@@ -82,7 +82,7 @@ public class GoogleScheduledMeetingsBatchScheduler implements SchedulingConfigur
                 String cron;
 
                 if (config == null) {
-                    cron = "0 */1 * * * *"; // fallback every 1 minute
+                    cron = "0 */20 * * * *"; // fallback every 1 minute
                     log.info("{} - SchedulerConfig NULL. Using fallback: {}", innerMethod, cron);
                     return new CronTrigger(cron).nextExecution(triggerContext);
                 }
@@ -90,7 +90,7 @@ public class GoogleScheduledMeetingsBatchScheduler implements SchedulingConfigur
                 cron = config.getCronTime();
 
                 if (cron == null || cron.isBlank()) {
-                    cron = "0 */1 * * * *";
+                    cron = "0 */20 * * * *";
                     log.info("{} - cronTime NULL/BLANK. Using fallback: {}", innerMethod, cron);
                 } else {
                     log.info("{} - Loaded Google Meet cron from DB: {}", innerMethod, cron);

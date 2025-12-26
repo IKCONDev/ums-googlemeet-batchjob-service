@@ -86,7 +86,7 @@ public class GoogleCompletedMeetingsBatchScheduler implements SchedulingConfigur
 
                 String cron;
                 if (config == null || config.getCronTime() == null || config.getCronTime().isBlank()) {
-                    cron = "0 */2 * * * *"; // fallback cron (every 2 minutes)
+                    cron = "0 */1 * * * *"; // fallback cron (every 2 minutes)
                     log.info("{} - cronTime for completed Google Meet meetings not found in DB. Using fallback cron - {}", methodNameInner, cron);
                 } else {
                     cron = config.getCronTime();
