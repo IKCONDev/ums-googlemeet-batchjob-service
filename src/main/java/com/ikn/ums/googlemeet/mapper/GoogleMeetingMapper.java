@@ -2,6 +2,7 @@ package com.ikn.ums.googlemeet.mapper;
 
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -10,11 +11,13 @@ import java.util.stream.Collectors;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Component;
 
+import com.ikn.ums.googlemeet.dto.EndDto;
 import com.ikn.ums.googlemeet.dto.GoogleCompletedMeetingAttendeeDto;
 import com.ikn.ums.googlemeet.dto.GoogleCompletedMeetingDto;
 import com.ikn.ums.googlemeet.dto.GoogleCompletedMeetingParticipantDto;
 import com.ikn.ums.googlemeet.dto.GoogleScheduledMeetingAttendeeDto;
 import com.ikn.ums.googlemeet.dto.GoogleScheduledMeetingDto;
+import com.ikn.ums.googlemeet.dto.StartDto;
 import com.ikn.ums.googlemeet.dto.TranscriptDto;
 import com.ikn.ums.googlemeet.entity.GoogleCompletedMeeting;
 import com.ikn.ums.googlemeet.entity.GoogleScheduledMeeting;
@@ -42,9 +45,9 @@ public class GoogleMeetingMapper {
      * @param entity the GoogleScheduledMeeting entity retrieved from the database
      * @return a GoogleScheduledMeetingDto containing mapped meeting details
      */
-    public GoogleScheduledMeetingDto toScheduledGoogleDto(GoogleScheduledMeeting entity) {
-        return modelMapper.map(entity, GoogleScheduledMeetingDto.class);
-    }
+//    public GoogleScheduledMeetingDto toScheduledGoogleDto(GoogleScheduledMeeting entity) {
+//        return modelMapper.map(entity, GoogleScheduledMeetingDto.class);
+//    }
 
     /**
      * Maps a GoogleCompletedMeeting JPA entity to its corresponding DTO.
@@ -156,9 +159,9 @@ public class GoogleMeetingMapper {
 
         ums.setMeetingId(null);
         ums.setEventId(
-        	        googleDto.getId()
+        	        googleDto.getEventid()
         	);
-        ums.setCreatedDateTime(googleDto.getCreatedAt());
+        ums.setCreatedDateTime(googleDto.getCreated());
         ums.setOriginalStartTimeZone(googleDto.getTimezone());
         ums.setOriginalEndTimeZone(googleDto.getTimezone());
         ums.setSubject(googleDto.getSummary());
@@ -167,12 +170,14 @@ public class GoogleMeetingMapper {
         ums.setEndDateTime(parseGoogleDateTime(googleDto.getEndTime()));
         ums.setStartTimeZone(googleDto.getTimezone());
         ums.setEndTimeZone(googleDto.getTimezone());
-        ums.setLocation(googleDto.getLocation());
+        //ums.setLocation(googleDto.getLocation());
+        ums.setLocation("Google Meet Meeting");;
         ums.setOrganizerEmailId(googleDto.getOrganizerEmail());
-        ums.setOnlineMeetingId(googleDto.getId());
-        ums.setOnlineMeetingProvider("GOOGLE_MEET");
+        ums.setOnlineMeetingId(googleDto.getEventid());
+        ums.setOnlineMeetingProvider("GOOGLE MEET");
         ums.setSeriesMasterId(googleDto.getRecurringEventId());
         ums.setJoinUrl(googleDto.getHangoutLink());
+        ums.setOccurrenceId(googleDto.getEventid());
         ums.setInsertedBy("AUTO-BATCH-PROCESS");
         ums.setInsertedDate(LocalDateTime.now().toString());
         ums.setEmailId(googleDto.getEmailId());
@@ -236,7 +241,7 @@ public class GoogleMeetingMapper {
         UMSCompletedMeetingDto ums = new UMSCompletedMeetingDto();
 
         ums.setMeetingId(null);
-        ums.setEventId(googleDto.getId());
+        ums.setEventId(googleDto.getEventid());
         ums.setEmailId(googleDto.getEmailId());
         ums.setOriginalStartTimeZone(googleDto.getTimezone());
         ums.setOriginalEndTimeZone(googleDto.getTimezone());
@@ -246,11 +251,14 @@ public class GoogleMeetingMapper {
         ums.setEndDateTime(parseGoogleDateTime(googleDto.getEndTime()));
         ums.setStartTimeZone(googleDto.getTimezone());
         ums.setEndTimeZone(googleDto.getTimezone());
-        ums.setLocation(googleDto.getLocation());
+        //ums.setLocation(googleDto.getLocation());
+        //ums.setOccurrenceId(googleDto.getInstanceEventId());
+        ums.setLocation("Google Meet Meeting");
         ums.setOrganizerEmailId(googleDto.getOrganizerEmail());
-        ums.setOnlineMeetingId(googleDto.getId());
-        ums.setOnlineMeetingProvider("GOOGLE_MEET");
+        ums.setOnlineMeetingId(googleDto.getEventid());
+        ums.setOnlineMeetingProvider("GOOGLE MEET");
         ums.setSeriesMasterId(googleDto.getRecurringEventId());
+        ums.setOccurrenceId(googleDto.getEventid());
         ums.setJoinUrl(googleDto.getHangoutLink());
         ums.setInsertedBy("AUTO-BATCH-PROCESS");
         ums.setInsertedDate(LocalDateTime.now().toString());
@@ -265,11 +273,6 @@ public class GoogleMeetingMapper {
         ums.setModifiedBy("AUTO-BATCH-PROCESS");
         
         
-        
-        
-        
-        
-
         // Map attendees (invited emails)
         if (googleDto.getAttendees() != null && !googleDto.getAttendees().isEmpty()) {
             Set<UMSCompletedMeetingAttendeeDto> attendees =
@@ -284,16 +287,29 @@ public class GoogleMeetingMapper {
         }
 
         // Map participants (actual presence) into attendance report
-        UMSAttendanceReportDto report = buildGoogleAttendanceReport(googleDto);
+        UMSAttendanceReportDto report = buildUMSAttendanceReport(googleDto);
         ums.setAttendanceReport(List.of(report));
         
      // Transcript Mapping
         if (googleDto.getTranscripts() != null) {
-            List<UMSTranscriptDto> transcripts = 
-                googleDto.getTranscripts().stream()
-                             .map(this::mapTranscript)
-                             .collect(Collectors.toList());
-            ums.setMeetingTranscripts(transcripts);
+//            List<UMSTranscriptDto> transcripts = 
+//                googleDto.getTranscripts().stream()
+//                             .map(this::mapTranscript)
+//                             .collect(Collectors.toList());
+        	
+        	List<UMSTranscriptDto> umsTranscripts = new ArrayList<>();
+        	List<TranscriptDto> googleTranscripts = googleDto.getTranscripts();
+        	
+        	//map google transcripts to ums transcripts
+        	if(googleTranscripts.size() > 0) {
+        		googleTranscripts.forEach(trascript -> {
+            		UMSTranscriptDto umsTranscript = mapTranscript(trascript, googleDto.getEventid());
+            		umsTranscripts.add(umsTranscript);
+            	});
+        		ums.setMeetingTranscripts(umsTranscripts);
+        	}else {
+        		ums.setMeetingTranscripts(Collections.emptyList());
+        	}
         } else {
             ums.setMeetingTranscripts(Collections.emptyList());
         }
@@ -323,9 +339,9 @@ public class GoogleMeetingMapper {
         UMSScheduledMeetingAttendeeDto dto = new UMSScheduledMeetingAttendeeDto();
         dto.setEmail(att.getEmail());
         dto.setName(att.getEmail() != null ? att.getEmail().split("@")[0] : null);
-        dto.setRole(Boolean.TRUE.equals(att.getOrganizer()) ? "Organizer" : "Attendee");
+        dto.setRole(Boolean.TRUE.equals(att.getOrganizer()) ? "Organizer" : "Presenter");
         dto.setType("required");
-        dto.setStatus(att.getResponseStatus() != null ? att.getResponseStatus() : "needsAction");
+        dto.setStatus(att.getResponseStatus() != null ? att.getResponseStatus() : "none");
         return dto;
     }
 
@@ -333,9 +349,9 @@ public class GoogleMeetingMapper {
         UMSCompletedMeetingAttendeeDto dto = new UMSCompletedMeetingAttendeeDto();
         dto.setEmail(att.getEmail());
         dto.setName(att.getEmail() != null ? att.getEmail().split("@")[0] : null);
-        dto.setRole(Boolean.TRUE.equals(att.getOrganizer()) ? "Organizer" : "Attendee");
+        dto.setRole(Boolean.TRUE.equals(att.getOrganizer()) ? "Organizer" : "Presenter");
         dto.setType("required");
-        dto.setStatus(att.getResponseStatus());
+        dto.setStatus(att.getResponseStatus() != null ? att.getResponseStatus() : "none");
         return dto;
     }
 
@@ -378,7 +394,7 @@ public class GoogleMeetingMapper {
     }
 
 
-    private UMSAttendanceReportDto buildGoogleAttendanceReport(GoogleCompletedMeetingDto google) {
+    private UMSAttendanceReportDto buildUMSAttendanceReport(GoogleCompletedMeetingDto google) {
         UMSAttendanceReportDto report = new UMSAttendanceReportDto();
         report.setMeetingStartDateTime(
                 google.getStartTime() != null ? google.getStartTime() : "UNKNOWN");
@@ -402,9 +418,78 @@ public class GoogleMeetingMapper {
 
 
    
-    public GoogleScheduledMeetingDto cloneScheduledMeeting(GoogleScheduledMeetingDto source) {
-        return modelMapper.map(source, GoogleScheduledMeetingDto.class);
+//    public GoogleScheduledMeetingDto cloneScheduledMeeting(GoogleScheduledMeetingDto source) {
+//        return modelMapper.map(source, GoogleScheduledMeetingDto.class);
+//    }
+    
+    public GoogleScheduledMeetingDto cloneScheduledMeeting(GoogleScheduledMeetingDto src) {
+        if (src == null) return null;
+
+        GoogleScheduledMeetingDto clone = new GoogleScheduledMeetingDto();
+
+        clone.setEventid(src.getEventid());
+        clone.setRecurringEventId(src.getRecurringEventId());
+        clone.setSummary(src.getSummary());
+        clone.setDescription(src.getDescription());
+        clone.setHangoutLink(src.getHangoutLink());
+        clone.setLocation(src.getLocation());
+        clone.setOrganizerEmail(src.getOrganizerEmail());
+        clone.setCreated(src.getCreated());
+        clone.setTimezone(src.getTimezone());
+
+        clone.setEmailId(src.getEmailId());
+        clone.setDepartmentId(src.getDepartmentId());
+        clone.setTeamId(src.getTeamId());
+        clone.setBatchId(src.getBatchId());
+        clone.setDepartmentName(src.getDepartmentName());
+        clone.setTeamName(src.getTeamName());
+        clone.setMeetingType(src.getMeetingType());
+
+        // Deep clone recurrence list
+        if (src.getRecurrence() != null) {
+            clone.setRecurrence(List.copyOf(src.getRecurrence()));
+        }
+
+        clone.setInsertedBy(src.getInsertedBy());
+        clone.setInsertedDate(src.getInsertedDate());
+
+        // Deep clone attendees
+//        if (src.getAttendees() != null) {
+//            List<GoogleScheduledMeetingAttendeeDto> attendeeClones = new ArrayList<>();
+//            for (GoogleScheduledMeetingAttendeeDto att : src.getAttendees()) {
+//                if (att != null) {
+//                    GoogleScheduledMeetingAttendeeDto attClone = new GoogleScheduledMeetingAttendeeDto();
+//                    attClone.setEmail(att.getEmail());
+//                    attClone.setName(att.getName());
+//                    attClone.setRole(att.getRole());
+//                    attClone.setType(att.getType());
+//                    attendeeClones.add(attClone);
+//                }
+//            }
+//            clone.setAttendees(attendeeClones);
+//        }
+
+        // Deep clone start
+        if (src.getStart() != null) {
+            StartDto startClone = new StartDto();
+            startClone.setDateTime(src.getStart().getDateTime());
+            startClone.setTimeZone(src.getStart().getTimeZone());
+            clone.setStart(startClone);
+        }
+
+        // Deep clone end
+        if (src.getEnd() != null) {
+            EndDto endClone = new EndDto();
+            endClone.setDateTime(src.getEnd().getDateTime());
+            endClone.setTimeZone(src.getEnd().getTimeZone());
+            clone.setEnd(endClone);
+        }
+
+        clone.setDbid(src.getDbid());
+
+        return clone;
     }
+
 
     public GoogleCompletedMeetingDto cloneCompletedMeeting(GoogleCompletedMeetingDto source) {
         return modelMapper.map(source, GoogleCompletedMeetingDto.class);
@@ -414,28 +499,24 @@ public class GoogleMeetingMapper {
     private LocalDateTime parseGoogleDateTime(String value) {
 
         if (value == null || value.isBlank()) {
-            return null;   // ✅ prevents NullPointerException
+            return null;  
         }
 
         return OffsetDateTime.parse(value).toLocalDateTime();
     }
 
     
-    private UMSTranscriptDto mapTranscript(TranscriptDto t) {
+    private UMSTranscriptDto mapTranscript(TranscriptDto t, String eventId) {
         UMSTranscriptDto dto = new UMSTranscriptDto();
         if (t == null) return dto;
 
         // Use transcript name as ID
-        dto.setTranscriptId(t.getName());
+        dto.setTranscriptId(t.getDocsDestination().getDocument());
 
         // Transcript content URL
         if (t.getDocsDestination() != null) {
             dto.setTranscriptContentUrl(t.getDocsDestination().getExportUri());
 
-            // File name extraction
-//            String downloadUrl = t.getDocsDestination().getExportUri();
-//            int idx = downloadUrl.lastIndexOf('/');
-//            dto.setTranscriptFilePath(idx != -1 ? downloadUrl.substring(idx + 1) : downloadUrl);
         } else {
             dto.setTranscriptContentUrl(null);
             dto.setTranscriptFilePath(null);
@@ -445,10 +526,41 @@ public class GoogleMeetingMapper {
         dto.setCreatedDateTime(t.getStartTime() != null ? t.getStartTime().toString() : null);
 
         // Transcript content placeholder (fetch separately if needed)
-        dto.setTranscriptContent(null);
+        dto.setTranscriptContent(t.getPlainText());
+        dto.setMeetingId(eventId);
 
         return dto;
     }
+    
+    
+    
+    public GoogleScheduledMeetingDto toScheduledGoogleDto(GoogleScheduledMeeting entity) {
+
+        GoogleScheduledMeetingDto dto =
+                modelMapper.map(entity, GoogleScheduledMeetingDto.class);
+
+        //MANUAL start mapping
+        if (entity.getStartTime() != null) {
+            StartDto start = new StartDto();
+            start.setDateTime(entity.getStartTime());
+            start.setTimeZone(entity.getTimezone());
+            dto.setStart(start);
+        }
+
+        //MANUAL end mapping
+        if (entity.getEndTime() != null) {
+            EndDto end = new EndDto();
+            end.setDateTime(entity.getEndTime());
+            end.setTimeZone(entity.getTimezone());
+            dto.setEnd(end);
+        }
+
+        //IMPORTANT: also set timezone explicitly
+        dto.setTimezone(entity.getTimezone());
+
+        return dto;
+    }
+
 
 
 

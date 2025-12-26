@@ -58,50 +58,48 @@ public class GoogleScheduledMeetingServiceImpl
 
         // 1. Fetch employees
         List<EmployeeDto> employees = employeeServiceClient.getEmployeesListFromEmployeeService();
-        log.info("{} - Fetched employees - count={}",
-                method, employees != null ? employees.size() : 0);
+        log.info("{} - Fetched employees - count={}", method, employees != null ? employees.size() : 0);
 
         if (employees == null || employees.isEmpty()) {
             log.warn("{} - No employees found. Skipping batch.", method);
             return Collections.emptyList();
         }
 
-        // 2. Extract email IDs
-        List<String> emailIds = employees.stream()
-                .map(EmployeeDto::getEmail)
-                .filter(Objects::nonNull)
-                .distinct()
+        // 2. Filter active users with email
+        List<EmployeeDto> eligibleEmployees = employees.stream()
+                .filter(e -> e.getEmail() != null)
                 .collect(Collectors.toList());
 
-        log.info("{} - Prepared emailIds list - count={}", method, emailIds.size());
+        if (eligibleEmployees.isEmpty()) {
+            log.warn("{} - No eligible employees found.", method);
+            return Collections.emptyList();
+        }
+
+        log.info("{} - Eligible employees - count={}", method, eligibleEmployees.size());
 
         // 3. Partition into batches
-        List<List<String>> emailBatches = partition(emailIds, BATCH_SIZE);
-
+        List<List<EmployeeDto>> employeeBatches = partition(eligibleEmployees, BATCH_SIZE);
         log.info("{} - Partitioned {} users into {} batch(es) with batchSize={}",
-                method, emailIds.size(), emailBatches.size(), BATCH_SIZE);
+                method, eligibleEmployees.size(), employeeBatches.size(), BATCH_SIZE);
 
         // 4. Execute async Google API calls
         List<GoogleScheduledMeetingDto> masterDtoList =
                 executeInBatches(
-                        emailBatches,
+                        employeeBatches,
                         googleAsyncService::getScheduledMeetingsAsync,
                         "GoogleScheduledMeetingsBatch"
                 );
 
-        log.info("{} - Async fetch completed. Total meetings fetched={}",
-                method, masterDtoList.size());
+        log.info("{} - Async fetch completed. Total meetings fetched={}", method, masterDtoList.size());
 
-        // 5. Pre-process business rules
-        masterDtoList = meetingProcessor.preProcess(masterDtoList);
-        log.info("{} - Processor preProcess completed - count={}",
-                method, masterDtoList.size());
+        if (masterDtoList.isEmpty()) {
+            log.warn("{} - No scheduled meetings fetched from Google.", method);
+            return Collections.emptyList();
+        }
 
-        // 6. Map DTO → Entity
-        List<GoogleScheduledMeeting> entities =
-                meetingMapper.toGoogleScheduledEntityList(masterDtoList);
+        List<GoogleScheduledMeeting> entities = meetingMapper.toGoogleScheduledEntityList(masterDtoList);
 
-        // 7. Fix bidirectional attendee relationship
+        // Fix bidirectional attendee relationship
         for (GoogleScheduledMeeting meeting : entities) {
             if (meeting.getAttendees() != null) {
                 for (GoogleScheduledMeetingAttendee attendee : meeting.getAttendees()) {
@@ -109,35 +107,25 @@ public class GoogleScheduledMeetingServiceImpl
                 }
             }
         }
-
         log.info("{} - Linked attendees to meeting entities", method);
 
         // 8. Persist (delete + reset + insert)
-        List<GoogleScheduledMeeting> persisted =
-                persistenceService.deleteResetAndPersist(entities);
-
-        log.info("{} - Persisted scheduled meetings - savedCount={}",
-                method, persisted != null ? persisted.size() : 0);
+        List<GoogleScheduledMeeting> persisted = persistenceService.deleteResetAndPersist(entities);
+        log.info("{} - Persisted scheduled meetings - savedCount={}", method,
+                persisted != null ? persisted.size() : 0);
 
         // 9. Map back to DTO
-        List<GoogleScheduledMeetingDto> persistedDtos =
-                meetingMapper.toGoogleScheduledDtoList(persisted);
+        List<GoogleScheduledMeetingDto> persistedDtos = meetingMapper.toGoogleScheduledDtoList(persisted);
 
         // 10. Convert to UMS DTO
-        List<UMSScheduledMeetingDto> umsDtos =
-                meetingMapper.toUMSScheduledDtoList(persistedDtos);
-
-        log.info("{} - Converted to UMS DTOs - count={}",
-                method, umsDtos.size());
+        List<UMSScheduledMeetingDto> umsDtos = meetingMapper.toUMSScheduledDtoList(persistedDtos);
+        log.info("{} - Converted to UMS DTOs - count={}", method, umsDtos.size());
 
         // 11. Publish to queue
         queuePublisherService.publishScheduledMeetingsBatchEventInQueue(umsDtos);
-
-        log.info("{} - Published scheduled meetings batch event - count={}",
-                method, umsDtos.size());
+        log.info("{} - Published scheduled meetings batch event - count={}", method, umsDtos.size());
 
         log.info("{} - COMPLETED successfully", method);
-
         return persistedDtos;
     }
 }

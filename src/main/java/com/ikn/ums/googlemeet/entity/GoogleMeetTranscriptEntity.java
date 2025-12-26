@@ -16,7 +16,7 @@ public class GoogleMeetTranscriptEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long sid;
+    private Long dbid;
 
     private String name;
     private String state;
@@ -26,16 +26,25 @@ public class GoogleMeetTranscriptEntity {
 
     @Column(name = "end_time")
     private String endTime;
+    
+    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @JoinColumn(name = "doscdestination")
+    private DocsDestinationEntity docsDestination;
 
-    @Column(name = "document_id")
-    private String document;
-
-    @Column(name = "export_uri")
-    private String exportUri;
-
+//    @Column(name = "document_id")
+//    private String document;
+//
+//    @Column(name = "export_uri")
+//    private String exportUri;
+    
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "meeting_id")
     private GoogleCompletedMeeting meeting;
     
-    private String id;
+    private String eventid;
+    
+    
+    @Column(columnDefinition = "TEXT")  // <-- Use TEXT for long content
+    private String plainText;
+
 }

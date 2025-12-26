@@ -6,6 +6,7 @@ import com.ikn.ums.googlemeet.dto.ConferenceRecordDto;
 import com.ikn.ums.googlemeet.dto.GoogleCompletedMeetingDto;
 import com.ikn.ums.googlemeet.dto.GoogleCompletedMeetingParticipantDto;
 import com.ikn.ums.googlemeet.dto.GoogleMeetingDetailsDto;
+import com.ikn.ums.googlemeet.dto.GoogleRecurringInstanceDto;
 import com.ikn.ums.googlemeet.dto.GoogleRecurringMeetingDetailsDto;
 import com.ikn.ums.googlemeet.dto.GoogleScheduledMeetingDto;
 import com.ikn.ums.googlemeet.dto.PlainTranscriptDto;
@@ -91,7 +92,8 @@ public interface GoogleCalendarService {
      * @param masterEventId recurring master event ID
      * @return list of meeting instances
      */
-    List<GoogleScheduledMeetingDto> fetchRecurringInstances(String masterEventId);
+    List<GoogleRecurringInstanceDto> fetchRecurringInstances(String masterEventId);
+
     
     
     

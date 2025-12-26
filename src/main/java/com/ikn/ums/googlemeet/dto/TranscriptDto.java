@@ -11,11 +11,14 @@ public class TranscriptDto {
     private String state;
     private String startTime;
     private String endTime;
-    private DocsDestination docsDestination;
+    private DocsDestinationDto docsDestination;
 
-    @Data
-    public static class DocsDestination {
-        private String document;
-        private String exportUri;
-    }
+//    @Data
+//    public static class DocsDestination {
+//        private String document;
+//        private String exportUri;
+//    }
+    
+    
+    private String plainText;
 }

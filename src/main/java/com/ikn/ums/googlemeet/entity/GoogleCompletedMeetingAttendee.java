@@ -29,7 +29,7 @@ public class GoogleCompletedMeetingAttendee {
             allocationSize = 1
     )
     @GeneratedValue(generator = "google_meeting_attendee_gen")
-    private Long sid;
+    private Long dbid;
 
     private String email;
 
@@ -43,7 +43,7 @@ public class GoogleCompletedMeetingAttendee {
 //    @JoinColumn(name = "meeting_id", nullable = false)
 //    private GoogleCompletedMeeting meeting;
     
-    private String id;
+    private String eventid;
     
     @ManyToOne
     @JoinColumn(name = "meeting_id")

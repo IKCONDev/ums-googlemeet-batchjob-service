@@ -3,6 +3,8 @@ package com.ikn.ums.googlemeet.dto;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -11,43 +13,44 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class GoogleScheduledMeetingDto {
-
-    private String id;                   
+  
+	@JsonProperty("id")
+    private String eventid;                   
     private String recurringEventId;     
     private String summary;              
     private String description;          
     private String hangoutLink;              
     private String location;             
     private String organizerEmail;       
-    private String createdAt;            
+    private String created;            
     private String timezone;             
-    private EventTime start;             
-    private EventTime end;  
+    //private EventTime start;             
+    //private EventTime end;  
     //private String googleEventId;        
-
-    @Data
-    @AllArgsConstructor
-    @NoArgsConstructor
-    public static class EventTime {
-        private String dateTime;  
-        private String timeZone;  
-    }
-
-    public String getStartTime() {
-        return start != null ? start.getDateTime() : null;
-    }
-
-    public String getEndTime() {
-        return end != null ? end.getDateTime() : null;
-    }
-
-    public String getStartTimeZone() {
-        return start != null ? start.getTimeZone() : timezone;
-    }
-
-    public String getEndTimeZone() {
-        return end != null ? end.getTimeZone() : timezone;
-    }
+//
+//    @Data
+//    @AllArgsConstructor
+//    @NoArgsConstructor
+//    public static class EventTime {
+//        private String dateTime;  
+//        private String timeZone;  
+//    }
+//
+//    public String getStartTime() {
+//        return start != null ? start.getDateTime() : null;
+//    }
+//
+//    public String getEndTime() {
+//        return end != null ? end.getDateTime() : null;
+//    }
+//
+//    public String getStartTimeZone() {
+//        return start != null ? start.getTimeZone() : timezone;
+//    }
+//
+//    public String getEndTimeZone() {
+//        return end != null ? end.getTimeZone() : timezone;
+//    }
     
     private String emailId;
     private Long departmentId;
@@ -64,7 +67,31 @@ public class GoogleScheduledMeetingDto {
     
     private List<GoogleScheduledMeetingAttendeeDto> attendees;
     
-    private Long sid;
+    private Long dbid;
+    
+    private StartDto start;
+    private EndDto end;
+    
+    public String getStartTime() {
+        return start != null ? start.getDateTime() : null;
+    }
+
+    public String getEndTime() {
+        return end != null ? end.getDateTime() : null;
+    }
+
+    public String getStartTimeZone() {
+        return start != null && start.getTimeZone() != null
+                ? start.getTimeZone()
+                : timezone;
+    }
+
+    public String getEndTimeZone() {
+        return end != null && end.getTimeZone() != null
+                ? end.getTimeZone()
+                : timezone;
+    }
+
     
     
     

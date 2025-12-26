@@ -34,7 +34,7 @@ public class GoogleScheduledMeeting {
             allocationSize = 1
     )
     @GeneratedValue(generator = "google_scheduled_meeting_gen")
-    private Long sid;
+    private Long dbid;
 
     //@Column(name = "google_event_id", unique = true, nullable = false)
     //private String googleEventId;       
@@ -47,7 +47,7 @@ public class GoogleScheduledMeeting {
     private String endTime;
     private String duration;
     private String timezone;
-    private String createdAt;
+    private String created;
 
     @Column(name = "hangoutLink")
     private String hangoutLink;
@@ -69,6 +69,10 @@ public class GoogleScheduledMeeting {
     private GoogleMeetingType meetingType;
     
     
+    @Column(name = "location")
+    private String location;
+    
+    
     
 
     @OneToMany(mappedBy = "meeting", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -80,6 +84,6 @@ public class GoogleScheduledMeeting {
     
     private String recurringEventId; 
     
-    private String id;
+    private String eventid;
 
 }

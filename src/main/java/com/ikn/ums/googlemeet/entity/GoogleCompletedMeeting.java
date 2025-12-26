@@ -5,8 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.ikn.ums.googlemeet.enums.GoogleMeetingType;
-import com.ikn.ums.zoom.entity.ZoomCompletedMeetingParticipant;
-import com.ikn.ums.zoom.entity.ZoomTranscriptMetadata;
+
 
 //import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
@@ -21,6 +20,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -39,20 +39,23 @@ public class GoogleCompletedMeeting {
             allocationSize = 1
     )
     @GeneratedValue(generator = "google_completed_meeting_gen")
-    private Long sid;
+    private Long dbid;
 
 //    @Column(name = "google_event_id", unique = true, nullable = false)
 //    private String googleEventId;       
     private String summary;           
     private String description;
     private String organizerEmail;
+    
+    @Column(name = "location")
+    private String location;
          
 
     private String startTime;
     private String endTime;
     private String duration;
     private String timezone;
-    private String createdAt;
+    private String created;
 
     @Column(name = "hangoutLink")
     private String hangoutLink;
@@ -62,13 +65,13 @@ public class GoogleCompletedMeeting {
     private String insertedBy = "AUTO-BATCH-PROCESS";
     private String insertedDate = LocalDateTime.now().toString();
 
-    private String emailId;
-    private Long departmentId;
-    private Long teamId;
-    private Long batchId;
-    private String departmentName;
-    private String teamName;
-    
+//    private String emailId;
+//    private Long departmentId;
+//    private Long teamId;
+//    private Long batchId;
+//    private String departmentName;
+//    private String teamName;
+//    
     @Enumerated(EnumType.STRING)
     @Column(name = "meeting_type")
     private GoogleMeetingType meetingType;
@@ -99,11 +102,25 @@ public class GoogleCompletedMeeting {
     
     
     
-    private String id;
+    private String eventid;
     
     @OneToMany(mappedBy = "meeting", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonManagedReference
     private List<GoogleCompletedMeetingAttendee> attendees = new ArrayList<>();
+    
+    
+    //---------------- TRANSIENT (NOT PERSISTED) ----------------
+    @Transient
+    private String emailId;
+    @Transient
+    private Long departmentId;
+    @Transient
+    private Long teamId;
+    private Long batchId;
+    @Transient
+    private String departmentName;
+    @Transient
+    private String teamName;
 
 
 }

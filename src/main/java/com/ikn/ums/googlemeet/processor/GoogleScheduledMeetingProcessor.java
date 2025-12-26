@@ -2,15 +2,25 @@ package com.ikn.ums.googlemeet.processor;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.ikn.ums.googlemeet.dto.EndDto;
+import com.ikn.ums.googlemeet.dto.GoogleCompletedMeetingDto;
+import com.ikn.ums.googlemeet.dto.GoogleRecurringInstanceDto;
 import com.ikn.ums.googlemeet.dto.GoogleScheduledMeetingAttendeeDto;
 import com.ikn.ums.googlemeet.dto.GoogleScheduledMeetingDto;
+import com.ikn.ums.googlemeet.dto.StartDto;
+import com.ikn.ums.googlemeet.exception.EmptyInputException;
+import com.ikn.ums.googlemeet.externaldto.EmployeeDto;
+import com.ikn.ums.googlemeet.mapper.GoogleMeetingMapper;
+import com.ikn.ums.googlemeet.repo.GoogleScheduledMeetingRepository;
 import com.ikn.ums.googlemeet.service.GoogleCalendarService;
 
 import lombok.extern.slf4j.Slf4j;
@@ -19,9 +29,21 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class GoogleScheduledMeetingProcessor
         implements MeetingProcessor<GoogleScheduledMeetingDto> {
+
+    private final EmptyInputException emptyInputException;
 	
 	 @Autowired
 	    private GoogleCalendarService googleCalendarService;
+	 
+	 @Autowired
+	 private GoogleMeetingMapper googlemeetingmapper;
+	 
+	 @Autowired
+	 private GoogleScheduledMeetingRepository scheduledMeetingsRepository;
+
+    GoogleScheduledMeetingProcessor(EmptyInputException emptyInputException) {
+        this.emptyInputException = emptyInputException;
+    }
 
     /**
      * Classifies a scheduled meeting type.
@@ -52,7 +74,7 @@ public class GoogleScheduledMeetingProcessor
 
         try {
 
-            if (meeting.getId() == null) {
+            if (meeting.getEventid() == null) {
                 log.warn("Scheduled meeting has no googleEventId. Skipping invitee fetch.");
                 meeting.setAttendees(Collections.emptyList());
                 return meeting;
@@ -61,19 +83,19 @@ public class GoogleScheduledMeetingProcessor
             // Fetch invitees from Google Calendar Event
             List<GoogleScheduledMeetingAttendeeDto> invitees =
                     googleCalendarService.fetchInvitees(
-                            meeting.getId(),
+                            meeting.getEventid(),
                             GoogleScheduledMeetingAttendeeDto.class
                     );
 
             meeting.setAttendees(invitees);
 
             log.debug("Fetched {} invitees for scheduled Google meeting {}",
-                      invitees.size(), meeting.getId());
+                      invitees.size(), meeting.getEventid());
 
         } catch (Exception ex) {
 
             log.error("Failed to fetch invitees for scheduled Google meeting {} -> {}",
-                      meeting.getId(), ex.getMessage());
+                      meeting.getEventid(), ex.getMessage());
 
             meeting.setAttendees(Collections.emptyList());
         }
@@ -96,23 +118,103 @@ public class GoogleScheduledMeetingProcessor
     @Override
     public List<GoogleScheduledMeetingDto> preProcess(List<GoogleScheduledMeetingDto> meetings) {
 
-        if (meetings == null || meetings.isEmpty()) {
-            return Collections.emptyList();
+        List<GoogleScheduledMeetingDto> result = new ArrayList<>();
+
+        log.info("preProcess() -> Starting preprocessing for {} scheduled meetings", meetings.size());
+
+        for (GoogleScheduledMeetingDto meeting : meetings) {
+
+            log.info("preProcess() -> Processing eventId={}, recurringEventId={}",
+                    meeting.getEventid(), meeting.getRecurringEventId());
+
+            // Check if this is a recurring meeting
+            if (meeting.getRecurringEventId() != null) {
+
+                log.info("preProcess() -> Recurring meeting detected -> recurringEventId={}", meeting.getRecurringEventId());
+
+                // Fetch recurring instances using Google Calendar API
+                List<GoogleRecurringInstanceDto> instances =
+                        googleCalendarService.fetchRecurringInstances(meeting.getRecurringEventId());
+
+                if (instances == null || instances.isEmpty()) {
+                    // No instances found, optionally keep only the parent
+                    log.warn("preProcess() -> No instances found for recurringEventId={} -> Keeping only parent", meeting.getRecurringEventId());
+                    GoogleScheduledMeetingDto cloneParent = googlemeetingmapper.cloneScheduledMeeting(meeting);
+                    result.add(cloneParent);
+                    continue;
+                }
+
+                // Expand instances
+                for (GoogleRecurringInstanceDto occ : instances) {
+
+                    // Deep clone the parent meeting
+                    GoogleScheduledMeetingDto clone = googlemeetingmapper.cloneScheduledMeeting(meeting);
+
+                    // Map instance start/end times
+                    clone.setStart(new StartDto(
+                            occ.getStart().getDateTime(),
+                            occ.getStart().getTimeZone()
+                    ));
+                    clone.setEnd(new EndDto(
+                            occ.getEnd().getDateTime(),
+                            occ.getEnd().getTimeZone()
+                    ));
+
+                    // Maintain recurringEventId reference
+                    clone.setRecurringEventId(meeting.getRecurringEventId());
+
+                    result.add(clone);
+
+                    log.info("preProcess() -> Added expanded occurrence -> instanceEventId={}", occ.getInstanceEventId());
+                }
+
+            } else {
+                // Non-recurring meeting
+                log.info("preProcess() -> Non-recurring meeting -> Added directly, eventId={}", meeting.getEventid());
+                GoogleScheduledMeetingDto clone = googlemeetingmapper.cloneScheduledMeeting(meeting);
+                result.add(clone);
+            }
         }
 
-        // Filter valid meetings, classify type, and deduplicate by eventId
-        return meetings.stream()
-                .filter(this::isScheduledMeeting)      // Keep only valid meetings
-                .map(this::classifyType)               // Set meetingType
-                .collect(Collectors.toMap(
-                        GoogleScheduledMeetingDto::getId, // key = eventId
-                        m -> m,                           // value = dto
-                        (existing, duplicate) -> existing // keep first occurrence
-                ))
-                .values()
-                .stream()
-                .collect(Collectors.toList());
+        log.info("preProcess() -> Preprocessing completed -> Total output meetings={}", result.size());
+        return result;
     }
+
+
+    
+    @Override
+    public List<GoogleScheduledMeetingDto> filterAlreadyProcessed(List<GoogleScheduledMeetingDto> meetings) {
+
+        final String methodName = "filterAlreadyProcessed()";
+
+        if (meetings == null || meetings.isEmpty()) {
+            log.info("{} - No meetings provided. Skipping duplicate check.", methodName);
+            return meetings;
+        }
+
+        log.info("{} - Starting duplicate filtering for {} incoming meetings",
+                methodName, meetings.size());
+
+        Set<String> incomingEventIds = meetings.stream()
+                .map(GoogleScheduledMeetingDto::getEventid)
+                .collect(Collectors.toSet());
+
+        Set<String> existingEventIds =
+        		scheduledMeetingsRepository.findExistingEventIds(incomingEventIds);
+
+        log.debug("{} - Incoming IDs: {}, Existing IDs in DB: {}",
+                methodName, incomingEventIds.size(), existingEventIds.size());
+
+        List<GoogleScheduledMeetingDto> filteredResult = meetings.stream()
+                .filter(m -> !existingEventIds.contains(m.getEventid()))
+                .collect(Collectors.toList());
+
+        log.info("{} - Duplicate filtering completed. Incoming: {}, AlreadyInDB: {}, NewToInsert: {}",
+                methodName, meetings.size(), existingEventIds.size(), filteredResult.size());
+
+        return filteredResult;
+    }
+
 
 
     /**
@@ -134,4 +236,43 @@ public class GoogleScheduledMeetingProcessor
 		// TODO Auto-generated method stub
 		return null;
 	}
+	
+	
+	 /**
+     * Enriches a completed Zoom meeting with employee/organizer details.
+     *
+     * <p>This method populates organizational and host-related metadata such as
+     * department ID, team ID, and host name based on the provided
+     * {@link EmployeeDto}. The enrichment is performed <b>in-memory only</b>
+     * and these values are not persisted in the raw Zoom meetings database.</p>
+     *
+     * <p>This method is invoked as part of the {@code MeetingPipeline} execution
+     * flow and is typically called after basic preprocessing and meeting type
+     * classification steps.</p>
+     *
+     * <p>The populated fields are intended solely for downstream communication
+     * (e.g., publishing enriched meeting data to the Meeting microservice)
+     * and should not be relied upon for persistence-related operations.</p>
+     *
+     * @param meeting  the completed Zoom meeting DTO to be enriched
+     * @param employee the employee context containing department, team,
+     *                 and host/organizer details
+     * @return the same meeting DTO enriched with employee-specific details
+     */
+    @Override
+    public GoogleScheduledMeetingDto setEmployeeDetails(
+    		GoogleScheduledMeetingDto meeting,
+            EmployeeDto employee) {
+
+        if (meeting == null || employee == null) {
+            return meeting;
+        }
+
+        meeting.setDepartmentId(employee.getDepartmentId());
+        meeting.setEmailId(employee.getEmail());
+        meeting.setTeamId(employee.getTeamId());
+       
+
+        return meeting;
+    }
 }
