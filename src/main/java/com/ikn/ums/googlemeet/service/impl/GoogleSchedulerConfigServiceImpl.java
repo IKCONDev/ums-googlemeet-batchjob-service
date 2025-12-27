@@ -45,7 +45,7 @@ public class GoogleSchedulerConfigServiceImpl implements GoogleSchedulerConfigSe
         String methodName = "getSchedulerConfigurationForPastMeetings()";
         log.info("{} - Fetching scheduler config for Past Google Meet meetings", methodName);
 
-        SchedulerConfig config = repo.findByTypeOfBatch("Past");
+        SchedulerConfig config = repo.findByTypeOfBatch("Completed");
 
         log.info("{} - Retrieved config: {}", methodName, config);
         return config;
