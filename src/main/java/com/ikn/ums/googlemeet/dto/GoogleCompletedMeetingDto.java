@@ -3,7 +3,7 @@ package com.ikn.ums.googlemeet.dto;
 import java.time.LocalDateTime;
 import java.util.List;
 
-
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -17,14 +17,16 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class GoogleCompletedMeetingDto {
 
-    private String id;                   
+	
+	@JsonProperty("id")
+    private String eventid;                   
     private String recurringEventId;     
     private String summary;              
     private String description;          
     private String hangoutLink;              
     private String location;             
     private String organizerEmail;       
-    private String createdAt;            
+    private String created;            
     private String timezone;             
     private EventTime start;             
     private EventTime end;  
@@ -76,9 +78,11 @@ public class GoogleCompletedMeetingDto {
     private String conferenceRecordId;
     
     // Drive API plain text
-    private List<PlainTranscriptDto> plainTranscripts;
+    //private List<PlainTranscriptDto> plainTranscripts;
     
-    private Long sid;
+    private Long dbid;
+    
+    private String instanceEventId;
     
     
     

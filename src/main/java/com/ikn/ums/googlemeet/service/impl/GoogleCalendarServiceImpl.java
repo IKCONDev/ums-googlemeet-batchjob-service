@@ -17,13 +17,16 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ikn.ums.googlemeet.dto.ConferenceRecordDto;
 import com.ikn.ums.googlemeet.dto.GoogleCompletedMeetingDto;
 import com.ikn.ums.googlemeet.dto.GoogleCompletedMeetingParticipantDto;
 import com.ikn.ums.googlemeet.dto.GoogleMeetingDetailsDto;
+import com.ikn.ums.googlemeet.dto.GoogleRecurringInstanceDto;
 import com.ikn.ums.googlemeet.dto.GoogleRecurringMeetingDetailsDto;
 import com.ikn.ums.googlemeet.dto.GoogleScheduledMeetingDto;
 import com.ikn.ums.googlemeet.dto.TranscriptDto;
@@ -31,6 +34,7 @@ import com.ikn.ums.googlemeet.model.AccessTokenResponseModel;
 import com.ikn.ums.googlemeet.model.GoogleCompletedMeetingParticipantsResponse;
 import com.ikn.ums.googlemeet.model.GoogleCompletedMeetingResponse;
 import com.ikn.ums.googlemeet.model.GoogleConferenceRecordsResponse;
+import com.ikn.ums.googlemeet.model.GoogleRecurringInstancesResponse;
 import com.ikn.ums.googlemeet.model.GoogleScheduledMeetingResponse;
 import com.ikn.ums.googlemeet.model.TranscriptResponse;
 import com.ikn.ums.googlemeet.service.GoogleCalendarService;
@@ -190,7 +194,7 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
     public GoogleRecurringMeetingDetailsDto fetchRecurringMeetingDetails(String recurringEventId) {
 
         try {
-            String url = googleUrlFactory.buildRecurringDetailsUrl("primary", recurringEventId);
+            String url = googleUrlFactory.buildRecurringDetailsUrl("userEmail", recurringEventId);
 
             return restTemplate.exchange(
                     url,
@@ -207,28 +211,43 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
 
 
     @Override
-    public List<GoogleScheduledMeetingDto> fetchRecurringInstances(String masterEventId) {
+    public List<GoogleRecurringInstanceDto> fetchRecurringInstances(String masterEventId) {
+
+        final String method = "fetchRecurringInstances";
+        log.info("{} - Fetching instances for recurringEventId={}", method, masterEventId);
 
         try {
             String url = googleUrlFactory.buildRecurringOccurrencesUrl("primary", masterEventId);
+            log.debug("{} - URL={}", method, url);
 
-            ResponseEntity<GoogleScheduledMeetingResponse> response =
+            ResponseEntity<GoogleRecurringInstancesResponse> response =
                     restTemplate.exchange(
                             url,
                             HttpMethod.GET,
                             new HttpEntity<>(getHeaders()),
-                            GoogleScheduledMeetingResponse.class
+                            GoogleRecurringInstancesResponse.class
                     );
 
-            return response.getBody() != null
-                    ? response.getBody().getItems()
-                    : Collections.emptyList();
+            GoogleRecurringInstancesResponse body = response.getBody();
+
+            if (body == null || body.getItems() == null || body.getItems().isEmpty()) {
+                log.warn("{} - No instances found for recurringEventId={}", method, masterEventId);
+                return Collections.emptyList();
+            }
+
+            log.info("{} - Retrieved {} instances for recurringEventId={}",
+                    method, body.getItems().size(), masterEventId);
+
+            return body.getItems();
 
         } catch (Exception ex) {
-            log.error("fetchRecurringInstances error", ex);
+            log.error("{} - Error fetching instances for recurringEventId={}",
+                    method, masterEventId, ex);
             return Collections.emptyList();
         }
     }
+
+
 
     @Override
     public List<ConferenceRecordDto> fetchConferenceRecords() {
@@ -259,27 +278,45 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
         try {
             String url = googleUrlFactory.buildConferenceParticipantsUrl(conferenceRecordId);
 
-            ResponseEntity<GoogleCompletedMeetingParticipantsResponse> response = restTemplate.exchange(
+            // 1️⃣ Fetch RAW JSON as String
+            ResponseEntity<String> rawResponse = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
                     new HttpEntity<>(getHeaders()),
-                    GoogleCompletedMeetingParticipantsResponse.class
+                    String.class
             );
 
-            return response.getBody() != null
-                    ? response.getBody().getParticipants()
+            String rawJson = rawResponse.getBody();
+
+            // 2️⃣ Log full raw response
+            log.info("RAW Participants API response for conferenceRecordId={}: \n{}",
+                    conferenceRecordId, rawJson);
+
+            if (rawJson == null || rawJson.isBlank()) {
+                return Collections.emptyList();
+            }
+
+            // 3️⃣ Manually deserialize
+            ObjectMapper objectMapper = new ObjectMapper();
+            GoogleCompletedMeetingParticipantsResponse parsed =
+                    objectMapper.readValue(rawJson, GoogleCompletedMeetingParticipantsResponse.class);
+
+            return parsed.getParticipants() != null
+                    ? parsed.getParticipants()
                     : Collections.emptyList();
 
         } catch (Exception ex) {
-            log.error("Error fetching participants for conferenceRecordId {}: {}", conferenceRecordId, ex.getMessage());
+            log.error("Error fetching participants for conferenceRecordId {}",
+                    conferenceRecordId, ex);
             return Collections.emptyList();
         }
     }
 
-    @Override
     public List<TranscriptDto> fetchTranscripts(String conferenceRecordId) {
+        final String method = "fetchTranscripts";
         try {
             String url = googleUrlFactory.buildConferenceTranscriptsUrl(conferenceRecordId);
+            log.info("{} - Fetching transcripts for conferenceRecordId={} using URL={}", method, conferenceRecordId, url);
 
             ResponseEntity<TranscriptResponse> response = restTemplate.exchange(
                     url,
@@ -288,37 +325,82 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
                     TranscriptResponse.class
             );
 
-            return response.getBody() != null
-                    ? response.getBody().getTranscripts()
-                    : Collections.emptyList();
+            if (response.getBody() == null) {
+                log.warn("{} - No response body found for conferenceRecordId={}", method, conferenceRecordId);
+                return Collections.emptyList();
+            }
+
+            List<TranscriptDto> transcripts = response.getBody().getTranscripts();
+            if (transcripts == null || transcripts.isEmpty()) {
+                log.warn("{} - No transcripts found for conferenceRecordId={}", method, conferenceRecordId);
+                return Collections.emptyList();
+            }
+
+            log.info("{} - Fetched {} transcripts for conferenceRecordId={}", method, transcripts.size(), conferenceRecordId);
+
+            // Optional: log each transcript ID and docsDestination
+            for (TranscriptDto transcript : transcripts) {
+                String docId = transcript.getDocsDestination() != null
+                        ? transcript.getDocsDestination().getDocument()
+                        : "null";
+                log.info("{} - Transcript name={}, docsDestination={}", method, transcript.getName(), docId);
+            }
+
+            return transcripts;
 
         } catch (Exception ex) {
-            log.error("Error fetching transcripts for conferenceRecordId {}: {}", conferenceRecordId, ex.getMessage());
+            log.error("{} - Error fetching transcripts for conferenceRecordId={}", method, conferenceRecordId, ex);
             return Collections.emptyList();
         }
     }
+
     
     
     @Override
     public String fetchPlainTranscriptText(String documentId) {
+        if (documentId == null || documentId.isBlank()) {
+            log.warn("DocumentId is null or empty. Cannot fetch transcript.");
+            return "";
+        }
+
+        log.info("fetchPlainTranscriptText - Fetching plain transcript for documentId {}", documentId);
+
         try {
             String url = googleUrlFactory.buildPlainTranscriptExportUrl(documentId);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBearerAuth(googleOAuth.getAccessTokenString());
+            headers.setAccept(Collections.singletonList(MediaType.TEXT_PLAIN));
 
             ResponseEntity<String> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
-                    new HttpEntity<>(getHeaders()),
+                    new HttpEntity<>(headers),
                     String.class
             );
 
-            return response.getBody();
+            String body = response.getBody();
 
+            if (response.getStatusCode().is2xxSuccessful()) {
+                log.info("fetchPlainTranscriptText - Successfully fetched transcript for documentId {}", documentId);
+                log.info("fetchPlainTranscriptText - Full Response Body:\n{}", body); 
+            } else {
+                log.warn("fetchPlainTranscriptText - Received non-success response {} for documentId {}", response.getStatusCode(), documentId);
+            }
+
+            return body;
+
+        } catch (HttpClientErrorException.NotFound e) {
+            log.warn("fetchPlainTranscriptText - File not found for documentId {}. Returning empty transcript.", documentId);
+            return "";
+        } catch (HttpClientErrorException.Forbidden e) {
+            log.error("fetchPlainTranscriptText - Access denied for documentId {}. Check permissions.", documentId);
+            return "";
         } catch (Exception ex) {
-            log.error("Error fetching plain transcript for documentId {}: {}", documentId, ex.getMessage(), ex);
-            return null;
+            log.error("fetchPlainTranscriptText - Error fetching plain transcript for documentId {}: {}", documentId, ex.getMessage(), ex);
+            return "";
         }
     }
-
 
 
    

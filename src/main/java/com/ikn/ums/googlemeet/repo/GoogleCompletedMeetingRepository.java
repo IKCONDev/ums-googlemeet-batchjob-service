@@ -23,9 +23,9 @@ public interface GoogleCompletedMeetingRepository extends JpaRepository<GoogleCo
     void resetSequence();
 
     @Query("""
-    	    SELECT g.id
+    	    SELECT g.eventid
     	    FROM GoogleCompletedMeeting g
-    	    WHERE g.id IN :ids
+    	    WHERE g.eventid IN :ids
     	""")
     	Set<String> findExistingEventIds(@Param("ids") Set<String> ids);
 

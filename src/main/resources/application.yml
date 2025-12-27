@@ -1,76 +1,95 @@
-# Conversion to YAML from Properties formar report
-# Warnings:
-# - The yaml file had comments which are lost in the refactoring!
 spring:
   application:
     name: ums-googlemeet-batchjob-service
+
   datasource:
     driver-class-name: org.postgresql.Driver
     url: jdbc:postgresql://localhost:5432/umsgooglemeetbatchdb
     username: postgres
     password: manager
+
   jpa:
     hibernate:
       ddl-auto: update
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     show-sql: true
+
   cache:
     type: redis
     redis:
       time-to-live: 3600000
       use-key-prefix: true
     cache-names: getAllActiveEmployeesCache
+
   data:
     redis:
       host: localhost
       port: 6379
       timeout: 4000
+
   rabbitmq:
     host: localhost
     port: 5672
     username: guest
     password: guest
+
 server:
   port: 8081
+
 google:
   clientId: 833149597528-p1kg85taid9cnd4kdnp0k44vi0s30793.apps.googleusercontent.com
   clientSecret: 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
   refreshToken: 1//0g09K6og3BBfKCgYIARAAGBASNwF-L9Ir6vDKtDgwHxx8a4-HUqrcETxaFWKdi6jfPgOkrutJNdZ0QF506gA7L5FT8XWf6RZS3k8
   tokenUrl: https://oauth2.googleapis.com/token
+
   calendarBaseUrl: https://www.googleapis.com/calendar/v3
   meetBaseUrl: https://meet.googleapis.com/v2
+  driveBaseUrl: https://www.googleapis.com/drive/v3
+
   auth-token:
     url: https://oauth2.googleapis.com/token
+
   meetings:
     upcoming:
       url: https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events?singleEvents=true&orderBy=startTime&timeMin={timeMin}
     completed:
-      url: https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events?singleEvents=true&timeMin={fromUtc}&timeMax={toUtc}
+      url: https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events?singleEvents=true&timeMin={timeMin}&timeMax={timeMax}
     meeting-details:
       url: https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events/{eventId}
     recurring-master:
       url: https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events/{recurringEventId}
     recurring-occurrences:
       url: https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events/{recurringEventId}/instances
+
     conference-records:
       url: ${google.meetBaseUrl}/conferenceRecords
     participants:
       url: ${google.meetBaseUrl}/{conferenceRecordId}/participants
     transcripts:
       url: ${google.meetBaseUrl}/{conferenceRecordId}/transcripts
+
+  drive:
+    files:
+      export:
+        url: ${google.driveBaseUrl}/files/{fileId}/export?mimeType={mimeType}
+
 rabbitmq:
   listener:
     simple:
       acknowledge-mode: auto
+
   exchange:
     googlemeet-scheduled-meetings: ums.googlemeet.scheduled.meetings.exchange
     googlemeet-completed-meetings: ums.googlemeet.completed.meetings.exchange
+
   queue:
     googlemeet-scheduled-meetings: ums.googlemeet.scheduled.meetings.queue
     googlemeet-completed-meetings: ums.googlemeet.completed.meetings.queue
+
   routing-key:
     googlemeet-scheduled-meetings: ums.googlemeet.scheduled.meetings.key
     googlemeet-completed-meetings: ums.googlemeet.completed.meetings.key
+
   dlx:
     exchange:
       googlemeet-scheduled-meetings: ums.googlemeet.scheduled.meetings.dlx.exchange
@@ -81,13 +100,19 @@ rabbitmq:
     routing-key:
       googlemeet-scheduled-meetings: ums.googlemeet.scheduled.meetings.dlx.routing
       googlemeet-completed-meetings: ums.googlemeet.completed.meetings.dlx.routing
+
 resilience4j:
   retry:
     instances:
       employeeServiceRetry:
         max-attempts: 3
         wait-duration: 2s
-        retry-exceptions: java.lang.IllegalStateException,java.net.ConnectException,java.net.SocketTimeoutException,java.net.UnknownHostException
+        retry-exceptions:
+          - java.lang.IllegalStateException
+          - java.net.ConnectException
+          - java.net.SocketTimeoutException
+          - java.net.UnknownHostException
+
   circuitbreaker:
     instances:
       employeeServiceCircuit:
@@ -96,6 +121,11 @@ resilience4j:
         wait-duration-in-open-state: 10s
         permitted-number-of-calls-in-half-open-state: 2
         automatic-transition-from-open-to-half-open-enabled: true
-        record-exceptions: java.lang.IllegalStateException,java.net.ConnectException,java.net.SocketTimeoutException,java.net.UnknownHostException
+        record-exceptions:
+          - java.lang.IllegalStateException
+          - java.net.ConnectException
+          - java.net.SocketTimeoutException
+          - java.net.UnknownHostException
+
 app:
   timezone: Asia/Calcutta

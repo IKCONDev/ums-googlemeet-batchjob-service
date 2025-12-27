@@ -28,14 +28,14 @@ public class GoogleCompletedMeetingParticipant {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private Long dbid;
 
     @Column(name = "name")
     private String name;
 
     @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @JoinColumn(name = "signed_in_user_id")
-    private SignedInUserEntity signedInUser;
+    private SignedInUserEntity signedinUser;
 
     @Column(name = "earliest_start_time")
     private String earliestStartTime;

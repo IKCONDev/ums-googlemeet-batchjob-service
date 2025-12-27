@@ -3,6 +3,8 @@ package com.ikn.ums.googlemeet.processor;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import com.ikn.ums.googlemeet.externaldto.EmployeeDto;
+
 /**
  * GoogleMeetProcessor
  *
@@ -131,4 +133,22 @@ public interface MeetingProcessor<T> {
     default List<T> filterAlreadyProcessed(List<T> meetings) {
         return meetings;
     }
+    
+    
+    
+    /**
+     * Enriches meeting with employee / organizer details.
+     *
+     * <p>This is a default no-op implementation so that processors
+     * that do not require employee context (or are used in other
+     * pipelines) are not forced to implement it.</p>
+     *
+     * @param meeting the meeting DTO
+     * @param employee the employee context
+     * @return the enriched meeting DTO
+     */
+    default T setEmployeeDetails(T meeting, EmployeeDto employee) {
+        return meeting;
+    }
+
 }

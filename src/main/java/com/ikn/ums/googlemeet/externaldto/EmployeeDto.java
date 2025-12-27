@@ -27,7 +27,7 @@ public class EmployeeDto implements Serializable{
 
 		private Long departmentId;
 		
-		//private Long teamId;
+		private Long teamId;
 		
 		private DepartmentDto department;
 		

@@ -16,10 +16,12 @@ import com.ikn.ums.googlemeet.dto.GoogleCompletedMeetingAttendeeDto;
 import com.ikn.ums.googlemeet.dto.GoogleCompletedMeetingDto;
 import com.ikn.ums.googlemeet.dto.GoogleCompletedMeetingParticipantDto;
 import com.ikn.ums.googlemeet.dto.GoogleMeetingDetailsDto;
+import com.ikn.ums.googlemeet.dto.GoogleRecurringInstanceDto;
 import com.ikn.ums.googlemeet.dto.GoogleScheduledMeetingDto;
 import com.ikn.ums.googlemeet.dto.PlainTranscriptDto;
 import com.ikn.ums.googlemeet.dto.TranscriptDto;
 import com.ikn.ums.googlemeet.enums.GoogleMeetingType;
+import com.ikn.ums.googlemeet.externaldto.EmployeeDto;
 import com.ikn.ums.googlemeet.mapper.GoogleMeetingMapper;
 import com.ikn.ums.googlemeet.repo.GoogleCompletedMeetingRepository;
 import com.ikn.ums.googlemeet.service.GoogleCalendarService;
@@ -46,58 +48,23 @@ public class GoogleCompletedMeetingProcessor
 
     @Override
     public List<GoogleCompletedMeetingDto> preProcess(List<GoogleCompletedMeetingDto> meetings) {
+        log.info("preProcess() called with {} meetings", meetings != null ? meetings.size() : 0);
 
-        List<GoogleCompletedMeetingDto> result = new ArrayList<>();
-
-        log.info("preProcess() -> Starting preprocessing for {} completed meetings", meetings.size());
-
-        for (GoogleCompletedMeetingDto meeting : meetings) {
-
-            log.info("preProcess() -> Processing eventId={}, recurringEventId={}",
-                    meeting.getId(), meeting.getRecurringEventId());
-
-            // RECURRING — expand instances
-            if (meeting.getRecurringEventId() != null) {
-
-                log.info("preProcess() -> Fetching recurring instances for recurringEventId={}",
-                        meeting.getRecurringEventId());
-
-                List<GoogleScheduledMeetingDto> instances =
-                        googleCalendarService.fetchRecurringInstances(meeting.getRecurringEventId());
-
-                if (instances == null || instances.isEmpty()) {
-                    log.warn("preProcess() -> No instances found for recurringEventId={} -> Skipping",
-                            meeting.getRecurringEventId());
-                    continue;
-                }
-
-                for (GoogleScheduledMeetingDto occ : instances) {
-
-                    GoogleCompletedMeetingDto clone =
-                            googlemeetingmapper.cloneCompletedMeeting(meeting);
-
-                    clone.setStart(new GoogleCompletedMeetingDto.EventTime(
-                            occ.getStartTime(), occ.getStartTimeZone()));
-                    clone.setEnd(new GoogleCompletedMeetingDto.EventTime(
-                            occ.getEndTime(), occ.getEndTimeZone()));
-                    clone.setRecurringEventId(meeting.getRecurringEventId());
-
-                    result.add(clone);
-
-                    log.info("preProcess() -> Added expanded occurrence -> eventId={}", occ.getId());
-                }
-
-            } else {
-                // NON-RECURRING
-                log.info("preProcess() -> Non-recurring meeting -> Added directly, eventId={}",
-                        meeting.getId());
-                result.add(meeting);
-            }
+        if (meetings == null) {
+            log.warn("Received null meetings list in preProcess(), returning empty list");
+            return Collections.emptyList();
         }
 
-        log.info("preProcess() -> Preprocessing completed -> Total output meetings={}", result.size());
-        return result;
+        if (meetings.isEmpty()) {
+            log.info("Received empty meetings list, nothing to process");
+            return Collections.emptyList();
+        }
+
+        log.info("Processing {} meetings", meetings.size());
+
+        return meetings;
     }
+
 
     // ===================== DUPLICATE FILTER =====================
 
@@ -111,28 +78,35 @@ public class GoogleCompletedMeetingProcessor
             return meetings;
         }
 
-        log.info("{} - Starting duplicate filtering for {} incoming meetings",
-                methodName, meetings.size());
+        log.info("{} - Starting duplicate filtering for {} incoming meetings, check duplicates by comparing in DB", methodName, meetings.size());
 
+        // Collect all event IDs from incoming meetings
         Set<String> incomingEventIds = meetings.stream()
-                .map(GoogleCompletedMeetingDto::getId)
+                .map(GoogleCompletedMeetingDto::getEventid)
                 .collect(Collectors.toSet());
 
-        Set<String> existingEventIds =
-                completedMeetingsRepository.findExistingEventIds(incomingEventIds);
+        // Fetch existing event IDs from DB
+        Set<String> existingEventIds = completedMeetingsRepository.findExistingEventIds(incomingEventIds);
 
         log.debug("{} - Incoming IDs: {}, Existing IDs in DB: {}",
                 methodName, incomingEventIds.size(), existingEventIds.size());
 
+        // Filter out meetings that already exist
         List<GoogleCompletedMeetingDto> filteredResult = meetings.stream()
-                .filter(m -> !existingEventIds.contains(m.getId()))
+                .filter(m -> !existingEventIds.contains(m.getEventid()))
                 .collect(Collectors.toList());
 
-        log.info("{} - Duplicate filtering completed. Incoming: {}, AlreadyInDB: {}, NewToInsert: {}",
-                methodName, meetings.size(), existingEventIds.size(), filteredResult.size());
+        log.info(
+            "{} - Duplicate filtering completed. Incoming: {}, AlreadyInDB: {}, NewToInsert: {}",
+            methodName,
+            meetings.size(),
+            existingEventIds.size(),
+            filteredResult.size()
+        );
 
         return filteredResult;
     }
+
 
     // ===================== CLASSIFICATION =====================
 
@@ -154,7 +128,7 @@ public class GoogleCompletedMeetingProcessor
     @Override
     public GoogleCompletedMeetingDto attachInvitees(GoogleCompletedMeetingDto meeting) {
 
-        if (meeting == null || meeting.getId() == null) {
+        if (meeting == null || meeting.getEventid() == null) {
             log.warn("Meeting has no googleEventId. Skipping invitee fetch.");
             meeting.setAttendees(Collections.emptyList());
             return meeting;
@@ -163,14 +137,14 @@ public class GoogleCompletedMeetingProcessor
         try {
             List<GoogleCompletedMeetingAttendeeDto> invitees =
                     googleCalendarService.fetchInvitees(
-                            meeting.getId(),
+                            meeting.getEventid(),
                             GoogleCompletedMeetingAttendeeDto.class);
 
             meeting.setAttendees(invitees);
 
         } catch (Exception ex) {
             log.error("Failed to fetch invitees for Google meeting {} -> {}",
-                    meeting.getId(), ex.getMessage());
+                    meeting.getEventid(), ex.getMessage());
             meeting.setAttendees(Collections.emptyList());
         }
 
@@ -184,14 +158,14 @@ public class GoogleCompletedMeetingProcessor
 
         final String methodName = "enrichMeetingData()";
 
-        if (meeting == null || meeting.getId() == null) {
+        if (meeting == null || meeting.getEventid() == null) {
             log.warn("{} - Meeting object or eventId is null. Skipping enrichment.", methodName);
             return meeting;
         }
 
         try {
             GoogleMeetingDetailsDto details =
-                    googleCalendarService.fetchMeetingDetails(meeting.getId());
+                    googleCalendarService.fetchMeetingDetails(meeting.getEventid());
 
             if (details == null) return meeting;
 
@@ -202,7 +176,7 @@ public class GoogleCompletedMeetingProcessor
 
         } catch (Exception ex) {
             log.error("{} - ERROR enriching eventId={} -> {}",
-                    methodName, meeting.getId(), ex.getMessage(), ex);
+                    methodName, meeting.getEventid(), ex.getMessage(), ex);
         }
 
         return meeting;
@@ -240,22 +214,21 @@ public class GoogleCompletedMeetingProcessor
         List<TranscriptDto> transcripts =
                 googleCalendarService.fetchTranscripts(meeting.getConferenceRecordId());
 
-        meeting.setTranscripts(
-                transcripts != null ? transcripts : Collections.emptyList());
+        // Ensure the list is never null
+        transcripts = transcripts != null ? transcripts : Collections.emptyList();
 
-        List<PlainTranscriptDto> plainTranscripts =
-                transcripts != null
-                        ? transcripts.stream()
-                            .filter(t -> t.getDocsDestination() != null)
-                            .map(t -> new PlainTranscriptDto(
-                                    t.getName(),
-                                    t.getDocsDestination().getDocument(),
-                                    googleCalendarService.fetchPlainTranscriptText(
-                                            t.getDocsDestination().getDocument())))
-                            .toList()
-                        : Collections.emptyList();
+        // If there’s at least one transcript, fetch its plain text and set it
+        if (!transcripts.isEmpty()) {
+            TranscriptDto transcript = transcripts.get(0); // Assuming only one transcript
+            if (transcript.getDocsDestination() != null) {
+                String plainText = googleCalendarService.fetchPlainTranscriptText(
+                        transcript.getDocsDestination().getDocument());
+                transcript.setPlainText(plainText); // Assuming you have a 'text' field in TranscriptDto
+            }
+        }
 
-        meeting.setPlainTranscripts(plainTranscripts);
+        // Set transcripts back to meeting
+        meeting.setTranscripts(transcripts);
 
         return meeting;
     }
@@ -274,7 +247,7 @@ public class GoogleCompletedMeetingProcessor
             }
             return false;
         } catch (Exception e) {
-            log.error("Failed to parse time for meeting {}: {}", dto.getId(), e.getMessage());
+            log.error("Failed to parse time for meeting {}: {}", dto.getEventid(), e.getMessage());
             return false;
         }
     }
@@ -313,5 +286,50 @@ public class GoogleCompletedMeetingProcessor
         OffsetDateTime recordStart = record.getStartTime();
         // Allow ±5 minutes tolerance
         return Math.abs(meetingStart.toEpochSecond() - recordStart.toEpochSecond()) <= 300;
+    }
+    
+    
+    
+    
+    
+    
+    
+    
+    /**
+     * Enriches a completed Zoom meeting with employee/organizer details.
+     *
+     * <p>This method populates organizational and host-related metadata such as
+     * department ID, team ID, and host name based on the provided
+     * {@link EmployeeDto}. The enrichment is performed <b>in-memory only</b>
+     * and these values are not persisted in the raw Zoom meetings database.</p>
+     *
+     * <p>This method is invoked as part of the {@code MeetingPipeline} execution
+     * flow and is typically called after basic preprocessing and meeting type
+     * classification steps.</p>
+     *
+     * <p>The populated fields are intended solely for downstream communication
+     * (e.g., publishing enriched meeting data to the Meeting microservice)
+     * and should not be relied upon for persistence-related operations.</p>
+     *
+     * @param meeting  the completed Zoom meeting DTO to be enriched
+     * @param employee the employee context containing department, team,
+     *                 and host/organizer details
+     * @return the same meeting DTO enriched with employee-specific details
+     */
+    @Override
+    public GoogleCompletedMeetingDto setEmployeeDetails(
+    		GoogleCompletedMeetingDto meeting,
+            EmployeeDto employee) {
+
+        if (meeting == null || employee == null) {
+            return meeting;
+        }
+
+        meeting.setDepartmentId(employee.getDepartmentId());
+        meeting.setEmailId(employee.getEmail());
+        meeting.setTeamId(employee.getTeamId());
+       
+
+        return meeting;
     }
 }

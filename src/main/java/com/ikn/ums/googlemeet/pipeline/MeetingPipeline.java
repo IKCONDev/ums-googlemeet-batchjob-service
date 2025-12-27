@@ -4,7 +4,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.ikn.ums.googlemeet.externaldto.EmployeeDto;
 import com.ikn.ums.googlemeet.processor.MeetingProcessor;
+
 
 
 public class MeetingPipeline<T> {
@@ -41,6 +43,15 @@ public class MeetingPipeline<T> {
     public MeetingPipeline<T> filterAlreadyProcessed(){
     	this.meetings = processor.filterAlreadyProcessed(meetings);
     	return this;
+    }
+    
+    
+    
+    public MeetingPipeline<T> setEmployeeDetails(EmployeeDto employee) {
+        this.meetings = meetings.stream()
+                .map(meeting -> processor.setEmployeeDetails(meeting, employee))
+                .collect(Collectors.toList());
+        return this;
     }
 
 

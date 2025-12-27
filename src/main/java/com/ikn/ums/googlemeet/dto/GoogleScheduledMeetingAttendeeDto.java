@@ -12,7 +12,7 @@ import lombok.Setter;
 @NoArgsConstructor
 public class GoogleScheduledMeetingAttendeeDto {
 
-    private Long id; 
+    private Long dbid; 
 
     private String email;
 
