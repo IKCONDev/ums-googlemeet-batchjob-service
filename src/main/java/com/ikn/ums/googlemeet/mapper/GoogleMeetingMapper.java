@@ -332,7 +332,7 @@ public class GoogleMeetingMapper {
     private UMSCompletedMeetingAttendeeDto mapCompletedAttendee(GoogleCompletedMeetingAttendeeDto att) {
         UMSCompletedMeetingAttendeeDto dto = new UMSCompletedMeetingAttendeeDto();
         dto.setEmail(att.getEmail());
-        dto.setName(att.getEmail() != null ? att.getEmail().split("@")[0] : null);
+        //dto.setName(att.getEmail() != null ? att.getEmail().split("@")[0] : null);
         dto.setRole(Boolean.TRUE.equals(att.getOrganizer()) ? "Organizer" : "Attendee");
         dto.setType("required");
         dto.setStatus(att.getResponseStatus());
@@ -354,7 +354,7 @@ public class GoogleMeetingMapper {
             record.setEmailAddress("UNKNOWN");
         }
 
-        record.setMeetingRole("Attendee");
+        record.setMeetingRole("Presenter");
 
         // Calculate duration in seconds safely
         long durationInSeconds = 0;
@@ -414,7 +414,7 @@ public class GoogleMeetingMapper {
     private LocalDateTime parseGoogleDateTime(String value) {
 
         if (value == null || value.isBlank()) {
-            return null;   // ✅ prevents NullPointerException
+            return null;   
         }
 
         return OffsetDateTime.parse(value).toLocalDateTime();
