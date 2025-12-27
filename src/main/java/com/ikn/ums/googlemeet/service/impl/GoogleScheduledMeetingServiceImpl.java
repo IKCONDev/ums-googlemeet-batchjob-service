@@ -2,7 +2,6 @@ package com.ikn.ums.googlemeet.service.impl;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,7 +14,6 @@ import com.ikn.ums.googlemeet.entity.GoogleScheduledMeetingAttendee;
 import com.ikn.ums.googlemeet.externaldto.EmployeeDto;
 import com.ikn.ums.googlemeet.externaldto.UMSScheduledMeetingDto;
 import com.ikn.ums.googlemeet.mapper.GoogleMeetingMapper;
-import com.ikn.ums.googlemeet.processor.GoogleScheduledMeetingProcessor;
 import com.ikn.ums.googlemeet.service.GoogleAsyncService;
 import com.ikn.ums.googlemeet.service.GoogleMeetingPersistenceService;
 import com.ikn.ums.googlemeet.service.GoogleMeetingsQueuePublisherService;
@@ -37,9 +35,6 @@ public class GoogleScheduledMeetingServiceImpl
 
     @Autowired
     private GoogleAsyncService googleAsyncService;
-
-    @Autowired
-    private GoogleScheduledMeetingProcessor meetingProcessor;
 
     @Autowired
     private GoogleMeetingMapper meetingMapper;

@@ -2,7 +2,6 @@ package com.ikn.ums.googlemeet.processor;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -16,13 +15,9 @@ import com.ikn.ums.googlemeet.dto.GoogleCompletedMeetingAttendeeDto;
 import com.ikn.ums.googlemeet.dto.GoogleCompletedMeetingDto;
 import com.ikn.ums.googlemeet.dto.GoogleCompletedMeetingParticipantDto;
 import com.ikn.ums.googlemeet.dto.GoogleMeetingDetailsDto;
-import com.ikn.ums.googlemeet.dto.GoogleRecurringInstanceDto;
-import com.ikn.ums.googlemeet.dto.GoogleScheduledMeetingDto;
-import com.ikn.ums.googlemeet.dto.PlainTranscriptDto;
 import com.ikn.ums.googlemeet.dto.TranscriptDto;
 import com.ikn.ums.googlemeet.enums.GoogleMeetingType;
 import com.ikn.ums.googlemeet.externaldto.EmployeeDto;
-import com.ikn.ums.googlemeet.mapper.GoogleMeetingMapper;
 import com.ikn.ums.googlemeet.repo.GoogleCompletedMeetingRepository;
 import com.ikn.ums.googlemeet.service.GoogleCalendarService;
 
@@ -33,18 +28,12 @@ import lombok.extern.slf4j.Slf4j;
 public class GoogleCompletedMeetingProcessor
         implements MeetingProcessor<GoogleCompletedMeetingDto> {
 
-    // ===================== DEPENDENCIES =====================
-
     @Autowired
     private GoogleCalendarService googleCalendarService;
 
     @Autowired
-    private GoogleMeetingMapper googlemeetingmapper;
-
-    @Autowired
     private GoogleCompletedMeetingRepository completedMeetingsRepository;
 
-    // ===================== PRE PROCESS =====================
 
     @Override
     public List<GoogleCompletedMeetingDto> preProcess(List<GoogleCompletedMeetingDto> meetings) {
@@ -65,8 +54,6 @@ public class GoogleCompletedMeetingProcessor
         return meetings;
     }
 
-
-    // ===================== DUPLICATE FILTER =====================
 
     @Override
     public List<GoogleCompletedMeetingDto> filterAlreadyProcessed(List<GoogleCompletedMeetingDto> meetings) {
@@ -108,8 +95,6 @@ public class GoogleCompletedMeetingProcessor
     }
 
 
-    // ===================== CLASSIFICATION =====================
-
     @Override
     public GoogleCompletedMeetingDto classifyType(GoogleCompletedMeetingDto dto) {
 
@@ -122,8 +107,6 @@ public class GoogleCompletedMeetingProcessor
         }
         return dto;
     }
-
-    // ===================== INVITEES =====================
 
     @Override
     public GoogleCompletedMeetingDto attachInvitees(GoogleCompletedMeetingDto meeting) {
@@ -150,8 +133,6 @@ public class GoogleCompletedMeetingProcessor
 
         return meeting;
     }
-
-    // ===================== ENRICH MEETING =====================
 
     @Override
     public GoogleCompletedMeetingDto enrichMeetingData(GoogleCompletedMeetingDto meeting) {
@@ -182,7 +163,6 @@ public class GoogleCompletedMeetingProcessor
         return meeting;
     }
 
-    // ===================== PARTICIPANTS =====================
 
     @Override
     public GoogleCompletedMeetingDto attachParticipants(GoogleCompletedMeetingDto meeting) {
@@ -201,7 +181,6 @@ public class GoogleCompletedMeetingProcessor
         return meeting;
     }
 
-    // ===================== TRANSCRIPTS =====================
 
     @Override
     public GoogleCompletedMeetingDto attachTranscripts(GoogleCompletedMeetingDto meeting) {
@@ -233,7 +212,6 @@ public class GoogleCompletedMeetingProcessor
         return meeting;
     }
 
-    // ===================== HELPERS =====================
 
     private boolean isCompletedMeeting(GoogleCompletedMeetingDto dto) {
         try {
@@ -251,8 +229,7 @@ public class GoogleCompletedMeetingProcessor
             return false;
         }
     }
-    
- // ------------------ Attach Conference Data ------------------
+
     
     public GoogleCompletedMeetingDto attachConferenceData(GoogleCompletedMeetingDto meeting) {
  
@@ -287,12 +264,7 @@ public class GoogleCompletedMeetingProcessor
         // Allow ±5 minutes tolerance
         return Math.abs(meetingStart.toEpochSecond() - recordStart.toEpochSecond()) <= 300;
     }
-    
-    
-    
-    
-    
-    
+
     
     
     /**
@@ -328,7 +300,8 @@ public class GoogleCompletedMeetingProcessor
         meeting.setDepartmentId(employee.getDepartmentId());
         meeting.setEmailId(employee.getEmail());
         meeting.setTeamId(employee.getTeamId());
-       
+        meeting.setHostName(employee.getFirstName()+" "+employee.getLastName());
+        meeting.setHostEmail(employee.getEmail());
 
         return meeting;
     }

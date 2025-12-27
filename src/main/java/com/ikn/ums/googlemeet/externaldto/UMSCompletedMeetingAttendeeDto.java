@@ -19,8 +19,7 @@ public class UMSCompletedMeetingAttendeeDto {
 
     private Long id;
     private String email;
-    //private String name;
     private String type;
     private String status;
-    private String role;
+    private String emailId;
 }

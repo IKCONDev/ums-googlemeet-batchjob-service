@@ -45,7 +45,8 @@ public class GoogleCompletedMeeting {
 //    private String googleEventId;       
     private String summary;           
     private String description;
-    private String organizerEmail;
+    private String hostEmail;
+    private String hostName;
     
     @Column(name = "location")
     private String location;
@@ -53,7 +54,7 @@ public class GoogleCompletedMeeting {
 
     private String startTime;
     private String endTime;
-    private String duration;
+    //private String duration;
     private String timezone;
     private String created;
 

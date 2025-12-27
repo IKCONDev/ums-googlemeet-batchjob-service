@@ -12,11 +12,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.ikn.ums.googlemeet.dto.EndDto;
-import com.ikn.ums.googlemeet.dto.GoogleCompletedMeetingDto;
 import com.ikn.ums.googlemeet.dto.GoogleRecurringInstanceDto;
 import com.ikn.ums.googlemeet.dto.GoogleScheduledMeetingAttendeeDto;
 import com.ikn.ums.googlemeet.dto.GoogleScheduledMeetingDto;
 import com.ikn.ums.googlemeet.dto.StartDto;
+import com.ikn.ums.googlemeet.enums.GoogleMeetingType;
 import com.ikn.ums.googlemeet.exception.EmptyInputException;
 import com.ikn.ums.googlemeet.externaldto.EmployeeDto;
 import com.ikn.ums.googlemeet.mapper.GoogleMeetingMapper;
@@ -53,16 +53,16 @@ public class GoogleScheduledMeetingProcessor
     public GoogleScheduledMeetingDto classifyType(GoogleScheduledMeetingDto dto) {
 
         if (dto.getRecurringEventId() != null) {
-            dto.setMeetingType("OCCURRENCE");  // Could also use enum if needed
+            dto.setMeetingType(GoogleMeetingType.RECURRENCE.getValue()); 
             return dto;
         }
 
         if (dto.getRecurrence() != null && !dto.getRecurrence().isEmpty()) {
-            dto.setMeetingType("RECURRENCE");
+            dto.setMeetingType(GoogleMeetingType.RECURRENCE.getValue());
             return dto;
         }
 
-        dto.setMeetingType("SINGLE_INSTANCE");
+        dto.setMeetingType(GoogleMeetingType.SINGLE_INSTANCE.getValue());
         return dto;
     }
 
@@ -271,8 +271,9 @@ public class GoogleScheduledMeetingProcessor
         meeting.setDepartmentId(employee.getDepartmentId());
         meeting.setEmailId(employee.getEmail());
         meeting.setTeamId(employee.getTeamId());
+        meeting.setHostName(employee.getFirstName()+" "+employee.getLastName());
+        meeting.setHostEmail(employee.getEmail());
        
-
         return meeting;
     }
 }

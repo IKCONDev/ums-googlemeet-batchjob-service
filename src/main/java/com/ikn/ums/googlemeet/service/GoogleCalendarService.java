@@ -9,7 +9,6 @@ import com.ikn.ums.googlemeet.dto.GoogleMeetingDetailsDto;
 import com.ikn.ums.googlemeet.dto.GoogleRecurringInstanceDto;
 import com.ikn.ums.googlemeet.dto.GoogleRecurringMeetingDetailsDto;
 import com.ikn.ums.googlemeet.dto.GoogleScheduledMeetingDto;
-import com.ikn.ums.googlemeet.dto.PlainTranscriptDto;
 import com.ikn.ums.googlemeet.dto.TranscriptDto;
 import com.ikn.ums.googlemeet.model.AccessTokenResponseModel;
 

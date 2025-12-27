@@ -1,7 +1,9 @@
 package com.ikn.ums.googlemeet.mapper;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -30,6 +32,9 @@ import com.ikn.ums.googlemeet.externaldto.UMSScheduledMeetingAttendeeDto;
 import com.ikn.ums.googlemeet.externaldto.UMSScheduledMeetingDto;
 import com.ikn.ums.googlemeet.externaldto.UMSTranscriptDto;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @Component
 public class GoogleMeetingMapper {
 
@@ -171,8 +176,9 @@ public class GoogleMeetingMapper {
         ums.setStartTimeZone(googleDto.getTimezone());
         ums.setEndTimeZone(googleDto.getTimezone());
         //ums.setLocation(googleDto.getLocation());
-        ums.setLocation("Google Meet Meeting");;
-        ums.setOrganizerEmailId(googleDto.getOrganizerEmail());
+        ums.setLocation("Google Meet Meeting");
+        ums.setOrganizerEmailId(googleDto.getHostEmail());
+        ums.setOrganizerName(googleDto.getHostName());
         ums.setOnlineMeetingId(googleDto.getEventid());
         ums.setOnlineMeetingProvider("GOOGLE MEET");
         ums.setSeriesMasterId(googleDto.getRecurringEventId());
@@ -254,7 +260,8 @@ public class GoogleMeetingMapper {
         //ums.setLocation(googleDto.getLocation());
         //ums.setOccurrenceId(googleDto.getInstanceEventId());
         ums.setLocation("Google Meet Meeting");
-        ums.setOrganizerEmailId(googleDto.getOrganizerEmail());
+        ums.setOrganizerEmailId(googleDto.getHostEmail());
+        ums.setOrganizerName(googleDto.getHostName());
         ums.setOnlineMeetingId(googleDto.getEventid());
         ums.setOnlineMeetingProvider("GOOGLE MEET");
         ums.setSeriesMasterId(googleDto.getRecurringEventId());
@@ -348,9 +355,7 @@ public class GoogleMeetingMapper {
     private UMSCompletedMeetingAttendeeDto mapCompletedAttendee(GoogleCompletedMeetingAttendeeDto att) {
         UMSCompletedMeetingAttendeeDto dto = new UMSCompletedMeetingAttendeeDto();
         dto.setEmail(att.getEmail());
-        //dto.setName(att.getEmail() != null ? att.getEmail().split("@")[0] : null);
-        dto.setRole(Boolean.TRUE.equals(att.getOrganizer()) ? "Organizer" : "Attendee");
-        dto.setRole(Boolean.TRUE.equals(att.getOrganizer()) ? "Organizer" : "Presenter");
+        dto.setEmailId(att.getEmail());
         dto.setType("required");
         dto.setStatus(att.getResponseStatus() != null ? att.getResponseStatus() : "none");
         return dto;
@@ -362,7 +367,6 @@ public class GoogleMeetingMapper {
 
         UMSAttendanceRecordDto record = new UMSAttendanceRecordDto();
 
-        // Safe signedinUser mapping
         if (p.getSignedinUser() != null) {
             record.setEmailAddress(p.getSignedinUser().getUser());
         } else if (p.getName() != null) {
@@ -373,15 +377,27 @@ public class GoogleMeetingMapper {
 
         record.setMeetingRole("Presenter");
 
-        // Calculate duration in seconds safely
         long durationInSeconds = 0;
-        if (p.getEarliestStartTime() != null && !p.getEarliestStartTime().isBlank() &&
-            p.getLatestEndTime() != null && !p.getLatestEndTime().isBlank()) {
 
-            OffsetDateTime start = OffsetDateTime.parse(p.getEarliestStartTime());
-            OffsetDateTime end = OffsetDateTime.parse(p.getLatestEndTime());
-            durationInSeconds = java.time.Duration.between(start, end).getSeconds();
+        try {
+            if (p.getEarliestStartTime() != null && !p.getEarliestStartTime().isBlank()
+                && p.getLatestEndTime() != null && !p.getLatestEndTime().isBlank()) {
+
+                OffsetDateTime start = OffsetDateTime.parse(p.getEarliestStartTime());
+                OffsetDateTime end = OffsetDateTime.parse(p.getLatestEndTime());
+
+                if (end.isAfter(start)) {
+                    durationInSeconds = Duration.between(start, end).getSeconds();
+                } else {
+                    log.warn("Invalid meeting time range -> start={}, end={}",
+                             p.getEarliestStartTime(), p.getLatestEndTime());
+                }
+            }
+        } catch (DateTimeParseException ex) {
+            log.error("Failed to parse meeting time -> start={}, end={}",
+                      p.getEarliestStartTime(), p.getLatestEndTime(), ex);
         }
+
 
         // Single interval
         UMSAttendanceIntervalDto interval = new UMSAttendanceIntervalDto();
@@ -434,7 +450,7 @@ public class GoogleMeetingMapper {
         clone.setDescription(src.getDescription());
         clone.setHangoutLink(src.getHangoutLink());
         clone.setLocation(src.getLocation());
-        clone.setOrganizerEmail(src.getOrganizerEmail());
+        clone.setHostEmail(src.getHostEmail());
         clone.setCreated(src.getCreated());
         clone.setTimezone(src.getTimezone());
 

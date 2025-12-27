@@ -5,7 +5,7 @@ import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
- 
+
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -40,7 +40,7 @@ import com.ikn.ums.googlemeet.model.TranscriptResponse;
 import com.ikn.ums.googlemeet.service.GoogleCalendarService;
 import com.ikn.ums.googlemeet.utils.GoogleUrlFactory;
 import com.ikn.ums.googlemeet.utils.InitializeGoogleOAuth;
- 
+
 import lombok.extern.slf4j.Slf4j;
  
  

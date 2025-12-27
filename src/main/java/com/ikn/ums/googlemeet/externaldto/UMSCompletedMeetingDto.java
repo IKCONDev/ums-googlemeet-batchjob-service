@@ -1,6 +1,5 @@
 package com.ikn.ums.googlemeet.externaldto;
 
-import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
@@ -57,6 +56,5 @@ public class UMSCompletedMeetingDto {
 	private String departmentName;
 	private String attendee;
 	private long attendeesCount;
-	private String ConferenceRecordId;
 
 }

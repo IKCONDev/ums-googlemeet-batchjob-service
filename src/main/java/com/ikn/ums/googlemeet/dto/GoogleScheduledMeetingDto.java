@@ -21,7 +21,8 @@ public class GoogleScheduledMeetingDto {
     private String description;          
     private String hangoutLink;              
     private String location;             
-    private String organizerEmail;       
+    private String hostEmail;
+    private String hostName;
     private String created;            
     private String timezone;             
     //private EventTime start;             
