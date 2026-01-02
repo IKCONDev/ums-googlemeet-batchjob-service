@@ -99,7 +99,7 @@ public class GoogleCompletedMeetingProcessor
     public GoogleCompletedMeetingDto classifyType(GoogleCompletedMeetingDto dto) {
 
         if (dto.getRecurringEventId() != null) {
-            dto.setMeetingType(GoogleMeetingType.OCCURRENCE.getValue());
+            dto.setMeetingType(GoogleMeetingType.RECURRENCE.getValue());
         } else if (dto.getRecurrence() != null && !dto.getRecurrence().isEmpty()) {
             dto.setMeetingType(GoogleMeetingType.RECURRENCE.getValue());
         } else {

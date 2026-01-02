@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.ikn.ums.googlemeet.dto.EndDto;
+import com.ikn.ums.googlemeet.dto.GoogleCompletedMeetingDto;
 import com.ikn.ums.googlemeet.dto.GoogleRecurringInstanceDto;
 import com.ikn.ums.googlemeet.dto.GoogleScheduledMeetingAttendeeDto;
 import com.ikn.ums.googlemeet.dto.GoogleScheduledMeetingDto;
@@ -53,16 +54,12 @@ public class GoogleScheduledMeetingProcessor
     public GoogleScheduledMeetingDto classifyType(GoogleScheduledMeetingDto dto) {
 
         if (dto.getRecurringEventId() != null) {
-            dto.setMeetingType(GoogleMeetingType.RECURRENCE.getValue()); 
-            return dto;
-        }
-
-        if (dto.getRecurrence() != null && !dto.getRecurrence().isEmpty()) {
             dto.setMeetingType(GoogleMeetingType.RECURRENCE.getValue());
-            return dto;
+        } else if (dto.getRecurrence() != null && !dto.getRecurrence().isEmpty()) {
+            dto.setMeetingType(GoogleMeetingType.RECURRENCE.getValue());
+        } else {
+            dto.setMeetingType(GoogleMeetingType.SINGLE_INSTANCE.getValue());
         }
-
-        dto.setMeetingType(GoogleMeetingType.SINGLE_INSTANCE.getValue());
         return dto;
     }
 

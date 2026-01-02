@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 
 import org.modelmapper.ModelMapper;
@@ -30,6 +33,7 @@ import com.ikn.ums.googlemeet.dto.GoogleRecurringInstanceDto;
 import com.ikn.ums.googlemeet.dto.GoogleRecurringMeetingDetailsDto;
 import com.ikn.ums.googlemeet.dto.GoogleScheduledMeetingDto;
 import com.ikn.ums.googlemeet.dto.TranscriptDto;
+import com.ikn.ums.googlemeet.exception.GoogleUserFailedException;
 import com.ikn.ums.googlemeet.model.AccessTokenResponseModel;
 import com.ikn.ums.googlemeet.model.GoogleCompletedMeetingParticipantsResponse;
 import com.ikn.ums.googlemeet.model.GoogleCompletedMeetingResponse;
@@ -81,6 +85,9 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
 
     @Autowired
     private ModelMapper modelMapper;
+    
+    
+    private static final Semaphore GOOGLE_RATE_LIMITER = new Semaphore(2, true);
 
     
     @Override
@@ -98,14 +105,40 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
     
     @Override
     @Retryable(
-        retryFor = { ResourceAccessException.class, IOException.class },
-        maxAttempts = MAX_API_RETRIES,
-        backoff = @Backoff(delay = 3000)
+            retryFor = { ResourceAccessException.class, IOException.class },
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 3000, multiplier = 2)
     )
     public List<GoogleScheduledMeetingDto> fetchScheduledMeetings(String userEmail) {
+        return fetchScheduledMeetings(userEmail, 1);
+    }
+    
+    /**
+     * Private method that performs:
+     *   - actual Google API call
+     *   - 429 rate limit handling
+     *
+     * @param userEmail Google user email
+     * @param attempt   current retry attempt number
+     */
+    private List<GoogleScheduledMeetingDto> fetchScheduledMeetings(
+            String userEmail, int attempt) {
+
+        final String methodName = "fetchScheduledMeetings()";
+        log.info("{} - Attempt {} for {}", methodName, attempt, userEmail);
+
+        if (attempt > MAX_API_RETRIES) {
+            throw new GoogleUserFailedException(
+                    "MAX_RETRIES_EXCEEDED",
+                    "Max retry limit reached for user " + userEmail
+            );
+        }
 
         try {
+            GOOGLE_RATE_LIMITER.acquire();
+
             String url = googleUrlFactory.buildUpcomingMeetingsUrl(userEmail);
+            log.debug("{} - URL={}", methodName, url);
 
             ResponseEntity<GoogleScheduledMeetingResponse> response =
                     restTemplate.exchange(
@@ -115,43 +148,188 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
                             GoogleScheduledMeetingResponse.class
                     );
 
-            return response.getBody() != null
-                    ? response.getBody().getItems()
-                    : Collections.emptyList();
+            GoogleScheduledMeetingResponse body = response.getBody();
 
-        } catch (Exception ex) {
-            log.error("fetchScheduledMeetings error", ex);
-            return Collections.emptyList();
+            if (body == null || body.getItems() == null) {
+                log.info("{} - Empty scheduled meetings response for {}",
+                        methodName, userEmail);
+                return Collections.emptyList();
+            }
+
+            log.info("{} - SUCCESS: Retrieved {} scheduled meetings for userEmail={}",
+                    methodName, body.getItems().size(), userEmail);
+
+            return body.getItems();
+
+        }
+        catch (HttpClientErrorException.NotFound ex) {
+
+            throw new GoogleUserFailedException(
+                    "GOOGLE_USER_NOT_FOUND",
+                    "Google user does not exist: " + userEmail
+            );
+
+        }
+        catch (HttpClientErrorException.TooManyRequests ex) {
+
+            int wait = Optional.ofNullable(
+                            ex.getResponseHeaders().getFirst("Retry-After"))
+                    .map(Integer::parseInt)
+                    .orElse(10);
+
+            log.warn("{} - 429 RATE LIMITED for {}. Retrying in {} sec",
+                    methodName, userEmail, wait);
+
+            try {
+                Thread.sleep(wait * 1000L);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                throw new GoogleUserFailedException(
+                        "THREAD_INTERRUPTED",
+                        "Retry interrupted for user " + userEmail
+                );
+            }
+
+            return fetchScheduledMeetings(userEmail, attempt + 1);
+
+        }
+        catch (ResourceAccessException ex) {
+            throw ex;
+        }
+        catch (Exception ex) {
+
+            log.error("{} - Unexpected error for {}",
+                    methodName, userEmail, ex);
+
+            throw new GoogleUserFailedException(
+                    "FETCH_SCHEDULED_FAILED",
+                    "Failed to fetch scheduled meetings for user " + userEmail
+            );
+
+        }
+        finally {
+            try {
+                GOOGLE_RATE_LIMITER.release();
+            } catch (Exception ex) {
+                log.warn("{} -> Failed to release rate limiter",
+                        methodName, ex);
+            }
         }
     }
 
     @Override
+    @Retryable(
+            retryFor = { ResourceAccessException.class, IOException.class },
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 3000, multiplier = 2)
+    )
     public List<GoogleCompletedMeetingDto> fetchCompletedMeetings(String userEmail) {
-        try {
-            // Fetch events from 2 days ago until now
-            LocalDate fromDate = LocalDate.now().minusDays(2);
+        return fetchCompletedMeetings(userEmail, 1);
+    }
 
+    /**
+     * Private recursive method that:
+     *  - Calls the Google "completed meetings" API
+     *  - Handles HTTP 429 rate limits
+     *
+     * @param userEmail Google user email
+     * @param attempt retry attempt number
+     */
+    private List<GoogleCompletedMeetingDto> fetchCompletedMeetings(
+            String userEmail, int attempt) {
+
+        final String methodName = "fetchCompletedMeetings()";
+        log.info("{} - Attempt {} for {}", methodName, attempt, userEmail);
+
+        if (attempt > MAX_API_RETRIES) {
+            throw new GoogleUserFailedException(
+                    "MAX_RETRIES_EXCEEDED",
+                    "Max retry limit reached for user " + userEmail
+            );
+        }
+
+        try {
+            GOOGLE_RATE_LIMITER.acquire();
+
+           
             String url = googleUrlFactory.buildCompletedMeetingsUrl(userEmail);
 
-            // Optional: Add query params directly if your UrlBuilder doesn't handle them
+          
             url += "&singleEvents=true&orderBy=startTime";
 
-            ResponseEntity<GoogleCompletedMeetingResponse> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    new HttpEntity<>(getHeaders()),
-                    GoogleCompletedMeetingResponse.class
+            log.debug("{} - URL={}", methodName, url);
+
+            ResponseEntity<GoogleCompletedMeetingResponse> response =
+                    restTemplate.exchange(
+                            url,
+                            HttpMethod.GET,
+                            new HttpEntity<>(getHeaders()),
+                            GoogleCompletedMeetingResponse.class
+                    );
+
+            GoogleCompletedMeetingResponse body = response.getBody();
+
+            if (body == null || body.getItems() == null) {
+                log.info("{} - Empty completed meetings response for {}",
+                        methodName, userEmail);
+                return Collections.emptyList();
+            }
+
+            List<GoogleCompletedMeetingDto> meetings = body.getItems();
+
+            log.info("{} - SUCCESS: Retrieved {} completed meetings for userEmail={}",
+                    methodName, meetings.size(), userEmail);
+
+            return meetings;
+
+        }
+        catch (HttpClientErrorException.NotFound ex) {
+            throw new GoogleUserFailedException(
+                    "GOOGLE_USER_NOT_FOUND",
+                    "Google user does not exist: " + userEmail
             );
+        }
+        catch (HttpClientErrorException.TooManyRequests ex) {
 
-            return response.getBody() != null
-                    ? response.getBody().getItems()
-                    : Collections.emptyList();
+            int wait = Optional.ofNullable(
+                            ex.getResponseHeaders().getFirst("Retry-After"))
+                    .map(Integer::parseInt)
+                    .orElse(10);
 
-        } catch (Exception ex) {
-            log.error("fetchCompletedMeetings error for user " + userEmail, ex);
-            return Collections.emptyList();
+            log.warn("{} - 429 RATE LIMITED for {}. Retrying in {} sec",
+                    methodName, userEmail, wait);
+
+            try {
+                Thread.sleep(wait * 1000L);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                throw new GoogleUserFailedException(
+                        "THREAD_INTERRUPTED",
+                        "Retry interrupted for user " + userEmail
+                );
+            }
+
+            return fetchCompletedMeetings(userEmail, attempt + 1);
+
+        }
+        catch (ResourceAccessException ex) {
+            throw ex; 
+        }
+        catch (Exception ex) {
+            throw new GoogleUserFailedException(
+                    "FETCH_COMPLETED_FAILED",
+                    "Failed to fetch completed meetings for user " + userEmail
+            );
+        }
+        finally {
+            try {
+                GOOGLE_RATE_LIMITER.release();
+            } catch (Exception ex) {
+                log.warn("{} -> Failed to release rate limiter", methodName, ex);
+            }
         }
     }
+
 
     
     @Override
@@ -177,37 +355,132 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
     @Override
     public <T> List<T> fetchInvitees(String eventId, Class<T> attendeeType) {
 
-        GoogleMeetingDetailsDto event = fetchMeetingDetails(eventId);
+        final String method = "fetchInvitees()";
 
-        if (event == null || event.getAttendees() == null) {
+        try {
+
+            if (eventId == null || eventId.isBlank()) {
+                log.warn("{} -> Invalid eventId", method);
+                return Collections.emptyList();
+            }
+
+            if (attendeeType == null) {
+                log.warn("{} -> attendeeType is null", method);
+                return Collections.emptyList();
+            }
+
+            log.info("{} -> Fetching invitees for eventId={}, targetType={}",
+                    method, eventId, attendeeType.getSimpleName());
+
+            GOOGLE_RATE_LIMITER.acquire();
+
+            GoogleMeetingDetailsDto event = fetchMeetingDetails(eventId);
+
+            if (event == null || event.getAttendees() == null || event.getAttendees().isEmpty()) {
+                log.info("{} -> No invitees found for eventId={}", method, eventId);
+                return Collections.emptyList();
+            }
+
+            List<?> attendees = event.getAttendees();
+
+            log.info("{} -> Retrieved {} invitees for eventId={}",
+                    method, attendees.size(), eventId);
+
+            return attendees.stream()
+                    .map(item -> {
+                        try {
+                            return modelMapper.map(item, attendeeType);
+                        } catch (Exception mapEx) {
+                            log.error("{} -> Mapping failed: {}", method, mapEx.getMessage());
+                            return null;
+                        }
+                    })
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+
+        } catch (Exception ex) {
+
+            log.error("{} -> ERROR for eventId={} -> {}",
+                    method, eventId, ex.getMessage(), ex);
+
             return Collections.emptyList();
-        }
 
-        return event.getAttendees()
-                .stream()
-                .map(a -> modelMapper.map(a, attendeeType))
-                .collect(Collectors.toList());
+        } finally {
+            try {
+                GOOGLE_RATE_LIMITER.release();
+            } catch (Exception ex) {
+                log.warn("{} -> Failed to release rate limiter: {}", method, ex.getMessage());
+            }
+        }
     }
 
+
     
+    @Retryable(
+            retryFor = { ResourceAccessException.class, IOException.class },
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 3000, multiplier = 2)
+    )
     @Override
     public GoogleRecurringMeetingDetailsDto fetchRecurringMeetingDetails(String recurringEventId) {
 
-        try {
-            String url = googleUrlFactory.buildRecurringDetailsUrl("userEmail", recurringEventId);
+        final String methodName = "fetchRecurringMeetingDetails()";
+        log.info("{} - Fetching occurrences for recurringEventId={}", methodName, recurringEventId);
 
-            return restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    new HttpEntity<>(getHeaders()),
-                    GoogleRecurringMeetingDetailsDto.class
-            ).getBody();
+        try {
+
+            GOOGLE_RATE_LIMITER.acquire();
+
+            String url = googleUrlFactory.buildRecurringDetailsUrl("userEmail", recurringEventId);
+            log.debug("{} - URL={}", methodName, url);
+
+            ResponseEntity<GoogleRecurringMeetingDetailsDto> response =
+                    restTemplate.exchange(
+                            url,
+                            HttpMethod.GET,
+                            new HttpEntity<>(getHeaders()),
+                            GoogleRecurringMeetingDetailsDto.class
+                    );
+
+            GoogleRecurringMeetingDetailsDto details = response.getBody();
+
+            if (details == null) {
+                log.warn("{} - No meeting details returned for recurringEventId={}", methodName, recurringEventId);
+                return null;
+            }
+
+            return details;
+
+        } catch (HttpClientErrorException.TooManyRequests ex) {
+            // Handle 429
+            int wait = Optional.ofNullable(ex.getResponseHeaders().getFirst("Retry-After"))
+                    .map(Integer::parseInt)
+                    .orElse(10);
+
+            log.warn("{} - 429 RATE LIMIT for recurringEventId={}. Retrying in {} sec",
+                    methodName, recurringEventId, wait);
+
+            try {
+                Thread.sleep(wait * 1000L);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+
+            return fetchRecurringMeetingDetails(recurringEventId); // retry
 
         } catch (Exception ex) {
-            log.error("fetchRecurringMeetingDetails error", ex);
+            log.error("{} - ERROR fetching occurrences for recurringEventId={} → {}",
+                    methodName, recurringEventId, ex.getMessage());
             return null;
+        } finally {
+            try {
+                GOOGLE_RATE_LIMITER.release();
+            } catch (Exception ex) {
+                log.warn("{} -> Failed to release rate limiter: {}", methodName, ex.getMessage());
+            }
         }
     }
+
 
 
     @Override
@@ -273,12 +546,21 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
     }
 
 
+    @Retryable(
+            retryFor = {ResourceAccessException.class, IOException.class},
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 3000, multiplier = 2)
+    )
     @Override
     public List<GoogleCompletedMeetingParticipantDto> fetchParticipants(String conferenceRecordId) {
-        try {
-            String url = googleUrlFactory.buildConferenceParticipantsUrl(conferenceRecordId);
+        final String method = "fetchParticipants()";
+        log.info("{} - Fetching participants for conferenceRecordId={}", method, conferenceRecordId);
 
-            // 1️⃣ Fetch RAW JSON as String
+        try {
+
+            GOOGLE_RATE_LIMITER.acquire();
+
+            String url = googleUrlFactory.buildConferenceParticipantsUrl(conferenceRecordId);
             ResponseEntity<String> rawResponse = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -287,36 +569,67 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
             );
 
             String rawJson = rawResponse.getBody();
-
-            // 2️⃣ Log full raw response
-            log.info("RAW Participants API response for conferenceRecordId={}: \n{}",
-                    conferenceRecordId, rawJson);
+            log.info("{} - RAW Participants API response for conferenceRecordId={}: \n{}",
+                    method, conferenceRecordId, rawJson);
 
             if (rawJson == null || rawJson.isBlank()) {
+                log.warn("{} - No participants returned for conferenceRecordId={}", method, conferenceRecordId);
                 return Collections.emptyList();
             }
 
-            // 3️⃣ Manually deserialize
             ObjectMapper objectMapper = new ObjectMapper();
             GoogleCompletedMeetingParticipantsResponse parsed =
                     objectMapper.readValue(rawJson, GoogleCompletedMeetingParticipantsResponse.class);
 
-            return parsed.getParticipants() != null
-                    ? parsed.getParticipants()
-                    : Collections.emptyList();
+            List<GoogleCompletedMeetingParticipantDto> participants =
+                    parsed.getParticipants() != null ? parsed.getParticipants() : Collections.emptyList();
+
+            log.info("{} - Retrieved {} participants for conferenceRecordId={}", method, participants.size(), conferenceRecordId);
+
+            return participants;
+
+        } catch (HttpClientErrorException.TooManyRequests ex) {
+            int wait = Optional.ofNullable(ex.getResponseHeaders().getFirst("Retry-After"))
+                    .map(Integer::parseInt)
+                    .orElse(10);
+
+            log.warn("{} - 429 RATE LIMIT for conferenceRecordId={}. Retrying in {} sec",
+                    method, conferenceRecordId, wait);
+
+            try { Thread.sleep(wait * 1000L); } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+
+            return fetchParticipants(conferenceRecordId); // retry
 
         } catch (Exception ex) {
-            log.error("Error fetching participants for conferenceRecordId {}",
-                    conferenceRecordId, ex);
+            log.error("{} - Error fetching participants for conferenceRecordId {}: {}", method, conferenceRecordId, ex.getMessage(), ex);
             return Collections.emptyList();
+        } finally {
+            try {
+                GOOGLE_RATE_LIMITER.release();
+            } catch (Exception ex) {
+                log.warn("{} -> Failed to release rate limiter: {}", method, ex.getMessage());
+            }
         }
     }
 
+    @Retryable(
+            retryFor = {ResourceAccessException.class, IOException.class},
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 3000, multiplier = 2)
+    )
+    @Override
     public List<TranscriptDto> fetchTranscripts(String conferenceRecordId) {
-        final String method = "fetchTranscripts";
+        final String method = "fetchTranscriptsWithRateLimit";
+        log.info("{} - Fetching transcripts for conferenceRecordId={}", method, conferenceRecordId);
+
         try {
+
+            GOOGLE_RATE_LIMITER.acquire();
+
             String url = googleUrlFactory.buildConferenceTranscriptsUrl(conferenceRecordId);
-            log.info("{} - Fetching transcripts for conferenceRecordId={} using URL={}", method, conferenceRecordId, url);
+            log.info("{} - Using URL={}", method, url);
 
             ResponseEntity<TranscriptResponse> response = restTemplate.exchange(
                     url,
@@ -331,6 +644,7 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
             }
 
             List<TranscriptDto> transcripts = response.getBody().getTranscripts();
+
             if (transcripts == null || transcripts.isEmpty()) {
                 log.warn("{} - No transcripts found for conferenceRecordId={}", method, conferenceRecordId);
                 return Collections.emptyList();
@@ -338,7 +652,6 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
 
             log.info("{} - Fetched {} transcripts for conferenceRecordId={}", method, transcripts.size(), conferenceRecordId);
 
-            // Optional: log each transcript ID and docsDestination
             for (TranscriptDto transcript : transcripts) {
                 String docId = transcript.getDocsDestination() != null
                         ? transcript.getDocsDestination().getDocument()
@@ -348,9 +661,29 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
 
             return transcripts;
 
+        } catch (HttpClientErrorException.TooManyRequests ex) {
+
+            int wait = Optional.ofNullable(ex.getResponseHeaders().getFirst("Retry-After"))
+                    .map(Integer::parseInt)
+                    .orElse(10);
+
+            log.warn("{} - 429 RATE LIMIT for conferenceRecordId={}. Retrying in {} sec...", method, conferenceRecordId, wait);
+
+            try { Thread.sleep(wait * 1000L); } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+
+            return fetchTranscripts(conferenceRecordId); 
+
         } catch (Exception ex) {
             log.error("{} - Error fetching transcripts for conferenceRecordId={}", method, conferenceRecordId, ex);
             return Collections.emptyList();
+        } finally {
+            try {
+                GOOGLE_RATE_LIMITER.release();
+            } catch (Exception ex) {
+                log.warn("{} -> Failed to release rate limiter: {}", method, ex.getMessage());
+            }
         }
     }
 

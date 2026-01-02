@@ -10,9 +10,13 @@ package com.ikn.ums.googlemeet.enums;
  */
 public enum GoogleMeetingType {
 
-    SINGLE_INSTANCE("SINGLE_INSTANCE"),
-    RECURRENCE("RECURRENCE"),
-    OCCURRENCE("OCCURRENCE");
+//    SINGLE_INSTANCE("SINGLE_INSTANCE"),
+//    RECURRENCE("RECURRENCE"),
+//    OCCURRENCE("OCCURRENCE");
+	
+	
+	 SINGLE_INSTANCE("singleInstance"),
+	 RECURRENCE("occurrence");
 
     private final String value;
 

@@ -2,8 +2,13 @@ package com.ikn.ums.googlemeet.utils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
+
+import com.ikn.ums.googlemeet.dto.BatchExecutionResult;
+import com.ikn.ums.googlemeet.dto.UserExecutionResult;
+import com.ikn.ums.googlemeet.enums.ProgressStatus;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -14,7 +19,6 @@ public abstract class AbstractBatchExecutor {
      * Partitions a list into batches of given size.
      */
     protected <T> List<List<T>> partition(List<T> list, int batchSize) {
-
         List<List<T>> batches = new ArrayList<>();
 
         if (list == null || list.isEmpty() || batchSize <= 0) {
@@ -29,52 +33,94 @@ public abstract class AbstractBatchExecutor {
     }
 
     /**
-     * Executes async operations in batches and aggregates results.
+     * Executes async operations in batches and aggregates success/failure results.
      *
      * @param batches           partitioned input
-     * @param asyncExecutor     async function (e.g. email -> CompletableFuture<List<R>>)
-     * @param context           log context name
+     * @param asyncExecutorFunc async function returning UserExecutionResult<R>
+     * @param context           log context
      */
-    protected <T, R> List<R> executeInBatches(
+    protected <T, R> BatchExecutionResult<T, R> executeInBatches(
             List<List<T>> batches,
-            Function<T, CompletableFuture<List<R>>> asyncExecutor,
+            Function<T, CompletableFuture<UserExecutionResult<R>>> asyncExecutorFunc,
             String context) {
 
-        List<R> masterResult = new ArrayList<>();
+        BatchExecutionResult<T, R> result = new BatchExecutionResult<>();
         int batchNumber = 1;
 
         for (List<T> batch : batches) {
 
-            log.info("{} - Processing batch {} with {} item(s)",
-                    context, batchNumber, batch.size());
+            log.info("{} - Processing batch {} with {} item(s)", context, batchNumber, batch.size());
 
-            List<CompletableFuture<List<R>>> futures = new ArrayList<>();
-
+            List<Map.Entry<T, CompletableFuture<UserExecutionResult<R>>>> tasks = new ArrayList<>();
             for (T item : batch) {
-                futures.add(asyncExecutor.apply(item));
+                tasks.add(Map.entry(item, asyncExecutorFunc.apply(item)));
             }
 
             CompletableFuture
-                    .allOf(futures.toArray(new CompletableFuture[0]))
+                    .allOf(tasks.stream()
+                            .map(Map.Entry::getValue)
+                            .toArray(CompletableFuture[]::new))
                     .join();
 
-            for (CompletableFuture<List<R>> future : futures) {
+            for (Map.Entry<T, CompletableFuture<UserExecutionResult<R>>> task : tasks) {
                 try {
-                    List<R> result = future.get();
-                    if (result != null && !result.isEmpty()) {
-                        masterResult.addAll(result);
+                    UserExecutionResult<R> execResult = task.getValue().get();
+
+                    if (execResult == null) {
+                        result.addFailedItem(task.getKey());
+                        log.error("{} - Null execution result for item={}", context, task.getKey());
+                        continue;
                     }
+
+                    // Success even if the returned list is empty
+                    if (execResult.isSuccess()) {
+                        result.addSuccessItem(task.getKey());
+                        if (execResult.getData() != null && !execResult.getData().isEmpty()) {
+                            result.addSuccessResult(execResult.getData());
+                        }
+                    } else {
+                        result.addFailedItem(task.getKey());
+                        log.error("{} - Failed for item={} -> {}", context, task.getKey(), execResult.getFailureReason());
+                    }
+
                 } catch (Exception ex) {
-                    log.error("{} - Batch {} execution failed", context, batchNumber, ex);
+                    result.addFailedItem(task.getKey());
+                    log.error("{} - Unexpected failure for item={}", context, task.getKey(), ex);
                 }
             }
-
-            log.info("{} - Completed batch {} -> totalRecordsSoFar={}",
-                    context, batchNumber, masterResult.size());
 
             batchNumber++;
         }
 
-        return masterResult;
+        return result;
+    }
+
+    /**
+     * Computes overall progress status of batch execution.
+     */
+    protected ProgressStatus calculateBatchStatus(BatchExecutionResult<?, ?> result) {
+        int failed = result.getFailedItems().size();
+        int success = result.getSuccessItems().size();
+
+        if (failed == 0) {
+            return ProgressStatus.SUCCESS;
+        } else if (success > 0) {
+            return ProgressStatus.PARTIAL_SUCCESS;
+        }
+        return ProgressStatus.FAILED;
+    }
+
+    /**
+     * Extract emails from items using the provided extractor function.
+     */
+    protected <T> List<String> extractEmails(List<T> items, Function<T, String> emailExtractor) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+
+        return items.stream()
+                .map(emailExtractor)
+                .filter(e -> e != null && !e.isBlank())
+                .toList();
     }
 }

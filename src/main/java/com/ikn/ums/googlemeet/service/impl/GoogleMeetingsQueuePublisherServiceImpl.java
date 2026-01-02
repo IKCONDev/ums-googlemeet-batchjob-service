@@ -32,7 +32,7 @@ public class GoogleMeetingsQueuePublisherServiceImpl implements GoogleMeetingsQu
      * @param meetings list of scheduled meeting DTOs to publish
      */
     @Override
-    public void publishScheduledMeetingsBatchEventInQueue(List<UMSScheduledMeetingDto> meetings) {
+    public void publishScheduledMeetingsBatchEventInQueue(List<UMSScheduledMeetingDto> meetings , Long batchId) {
 
         ScheduledMeetingsBatchEvent event = new ScheduledMeetingsBatchEvent();
         event.setBatchId(Math.abs(new Random().nextLong()));
@@ -51,7 +51,7 @@ public class GoogleMeetingsQueuePublisherServiceImpl implements GoogleMeetingsQu
      * @param meetings list of completed meeting DTOs to publish
      */
     @Override
-    public void publishCompletedMeetingsBatchEventInQueue(List<UMSCompletedMeetingDto> meetings) {
+    public void publishCompletedMeetingsBatchEventInQueue(List<UMSCompletedMeetingDto> meetings , Long batchId) {
 
         CompletedMeetingsBatchEvent event = new CompletedMeetingsBatchEvent();
         event.setBatchId(Math.abs(new Random().nextLong()));

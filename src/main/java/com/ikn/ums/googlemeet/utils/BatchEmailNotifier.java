@@ -23,9 +23,10 @@ public class BatchEmailNotifier {
             String[] emails,
             ProgressStatus status,
             LocalDateTime startTime,
-            LocalDateTime endTime,
-            String methodName
+            LocalDateTime endTime
+//            String methodName
     ) {
+    	String methodName = "sendBatchStatusEmailByEnv";
 
         try {
             if (umsAppEnv == null || umsAppEnv.length() == 0 ) {

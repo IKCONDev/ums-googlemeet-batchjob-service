@@ -7,8 +7,8 @@ import com.ikn.ums.googlemeet.externaldto.UMSScheduledMeetingDto;
 
 public interface GoogleMeetingsQueuePublisherService {
 	
-	void publishScheduledMeetingsBatchEventInQueue(List<UMSScheduledMeetingDto> meetings);
+	void publishScheduledMeetingsBatchEventInQueue(List<UMSScheduledMeetingDto> meetings, Long batchId);
 	   
-	void publishCompletedMeetingsBatchEventInQueue(List<UMSCompletedMeetingDto> meetings);
+	void publishCompletedMeetingsBatchEventInQueue(List<UMSCompletedMeetingDto> meetings, Long batchId);
 
 }

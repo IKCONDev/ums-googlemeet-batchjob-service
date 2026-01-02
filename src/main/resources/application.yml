@@ -142,7 +142,7 @@ app:
 
 batch:
   process:
-    trigger-email: ums-support@ikcontech.com,vaishnav.p@ikcontech.com,bharat@ikcontech.com,mahesh.jarati@ikcontech.com, siri.chenimini1@gmail.com
+    trigger-email: ums-support@ikcontech.com,vaishnav.p@ikcontech.com,bharat@ikcontech.com,mahesh.jarati@ikcontech.com, chenimini.sirilakshmi@ikcontech.com
 
 ums:
   environment:
