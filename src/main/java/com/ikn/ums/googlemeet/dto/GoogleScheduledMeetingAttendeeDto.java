@@ -21,5 +21,5 @@ public class GoogleScheduledMeetingAttendeeDto {
     private Boolean self;      // true if attendee is self, may be null
 
     @JsonProperty("responseStatus")
-    private String responseStatus; // "accepted", "needsAction", etc.
+    private String responseStatus; // "accepted", "needsAction"
 }

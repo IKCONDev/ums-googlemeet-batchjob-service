@@ -8,5 +8,5 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class GoogleKeyDto {
-    private String type; // e.g., "hangoutsMeet"
+    private String type; 
 }

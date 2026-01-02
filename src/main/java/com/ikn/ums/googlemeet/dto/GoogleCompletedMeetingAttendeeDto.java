@@ -16,13 +16,13 @@ public class GoogleCompletedMeetingAttendeeDto {
     private String email;
 
 	@JsonProperty("organizer")
-    private Boolean organizer;   // optional, may be null if not present
+    private Boolean organizer;   
 
 	@JsonProperty("self")
-    private Boolean self;        // optional, may be null if not present
+    private Boolean self;        
 
     @JsonProperty("responseStatus")
     private String responseStatus;
 
-    //private GoogleCompletedMeetingDto meeting; // link to meeting if needed
+    //private GoogleCompletedMeetingDto meeting; 
 }

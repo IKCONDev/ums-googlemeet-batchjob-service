@@ -21,29 +21,20 @@ public class PlainTranscriptEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long sid;
 
-    /**
-     * conferenceRecords/.../transcripts/{uuid}
-     */
+    
     @Column(nullable = false, length = 512)
     private String transcriptName;
 
-    /**
-     * Google Docs fileId
-     */
+   
     @Column(nullable = false, length = 128)
     private String documentId;
 
-    /**
-     * Plain text exported via Drive API
-     */
+    
     
     @Column(columnDefinition = "TEXT")  // <-- Use TEXT for long content
     private String plainText;
 
 
-    /**
-     * Audit field
-     */
     private OffsetDateTime createdAt;
     
     @ManyToOne(fetch = FetchType.LAZY)

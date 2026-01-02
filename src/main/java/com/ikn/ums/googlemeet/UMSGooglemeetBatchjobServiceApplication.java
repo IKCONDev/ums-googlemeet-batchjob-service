@@ -1,5 +1,7 @@
 package com.ikn.ums.googlemeet;
 
+import java.util.concurrent.Executor;
+
 import org.modelmapper.ModelMapper;
 import org.modelmapper.convention.MatchingStrategies;
 import org.springframework.boot.SpringApplication;
@@ -15,8 +17,15 @@ import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.retry.annotation.EnableRetry;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import lombok.extern.slf4j.Slf4j;
+
+/**
+ * @author CheniminiSiriLakshmi
+ * @version 1.0
+ * 
+ */
 
 @EnableCaching
 @EnableAspectJAutoProxy(proxyTargetClass = true)
@@ -26,16 +35,16 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @EnableDiscoveryClient
 @EnableRetry
-public class UmsGooglemeetBatchjobServiceApplication extends SpringBootServletInitializer {
+public class UMSGooglemeetBatchjobServiceApplication extends SpringBootServletInitializer {
 
 	@Override
 	protected SpringApplicationBuilder configure(SpringApplicationBuilder builder) {
 		log.info("configure() entered");
-		return builder.sources(UmsGooglemeetBatchjobServiceApplication.class);
+		return builder.sources(UMSGooglemeetBatchjobServiceApplication.class);
 	}
 
 	public static void main(String[] args) {
-		SpringApplication.run(UmsGooglemeetBatchjobServiceApplication.class, args);
+		SpringApplication.run(UMSGooglemeetBatchjobServiceApplication.class, args);
 	}
 
 	// Default LoadBalanced RestTemplate
@@ -68,6 +77,21 @@ public class UmsGooglemeetBatchjobServiceApplication extends SpringBootServletIn
 	public RestTemplate externalIntegrationRestTemplate() {
 		return new RestTemplate();
 	}
+	
+	@Bean(name = "emailTaskExecutor")
+    public Executor emailTaskExecutor() {
+
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(5);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("email-exec-");
+        executor.initialize();
+
+        log.info("emailTaskExecutor bean initialized");
+
+        return executor;
+    }
 
 }
 

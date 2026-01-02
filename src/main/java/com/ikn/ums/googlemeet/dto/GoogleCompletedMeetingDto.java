@@ -37,7 +37,7 @@ public class GoogleCompletedMeetingDto {
     @AllArgsConstructor
     @NoArgsConstructor
     public static class EventTime {
-        private String dateTime;  // ISO-8601 string, e.g., "2025-12-09T10:00:00Z"
+        private String dateTime; 
         private String timeZone;  
     }
 
