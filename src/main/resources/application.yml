@@ -13,6 +13,13 @@ spring:
       ddl-auto: update
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     show-sql: true
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC   
+
+  jackson:
+    time-zone: UTC        
 
   mail:
     host: smtp.gmail.com
@@ -46,6 +53,9 @@ spring:
 
 server:
   port: 8081
+
+user:
+  timezone: UTC
 
 google:
   clientId: 833149597528-p1kg85taid9cnd4kdnp0k44vi0s30793.apps.googleusercontent.com
@@ -137,8 +147,7 @@ resilience4j:
           - java.net.SocketTimeoutException
           - java.net.UnknownHostException
 
-app:
-  timezone: Asia/Calcutta
+
 
 batch:
   process:

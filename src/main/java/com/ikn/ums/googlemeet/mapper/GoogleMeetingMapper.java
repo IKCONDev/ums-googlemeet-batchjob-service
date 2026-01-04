@@ -3,6 +3,7 @@ package com.ikn.ums.googlemeet.mapper;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -401,8 +402,11 @@ public class GoogleMeetingMapper {
 
         // Single interval
         UMSAttendanceIntervalDto interval = new UMSAttendanceIntervalDto();
-        interval.setJoinDateTime(p.getEarliestStartTime() != null ? p.getEarliestStartTime() : "UNKNOWN");
-        interval.setLeaveDateTime(p.getLatestEndTime() != null ? p.getLatestEndTime() : "UNKNOWN");
+//        interval.setJoinDateTime(p.getEarliestStartTime() != null ? p.getEarliestStartTime() : "UNKNOWN");
+//        interval.setLeaveDateTime(p.getLatestEndTime() != null ? p.getLatestEndTime() : "UNKNOWN");
+        interval.setJoinDateTime(toUtcString(p.getEarliestStartTime()));
+        interval.setLeaveDateTime(toUtcString(p.getLatestEndTime()));
+
         //interval.setAttendeeDurationInSeconds(durationInSeconds);
 
         record.setAttendanceIntervals(List.of(interval));
@@ -411,12 +415,24 @@ public class GoogleMeetingMapper {
     }
 
 
-    private UMSAttendanceReportDto buildUMSAttendanceReport(GoogleCompletedMeetingDto google) {
+    private String toUtcString(String dateTimeStr) {
+        if (dateTimeStr == null || dateTimeStr.isBlank()) return "UNKNOWN";
+
+        return OffsetDateTime.parse(dateTimeStr)
+                             .withOffsetSameInstant(ZoneOffset.UTC)
+                             .toString();
+    }
+
+	private UMSAttendanceReportDto buildUMSAttendanceReport(GoogleCompletedMeetingDto google) {
         UMSAttendanceReportDto report = new UMSAttendanceReportDto();
-        report.setMeetingStartDateTime(
-                google.getStartTime() != null ? google.getStartTime() : "UNKNOWN");
-        report.setMeetingEndDateTime(
-                google.getEndTime() != null ? google.getEndTime() : "UNKNOWN");
+//        report.setMeetingStartDateTime(
+//                google.getStartTime() != null ? google.getStartTime() : "UNKNOWN");
+//        report.setMeetingEndDateTime(
+//                google.getEndTime() != null ? google.getEndTime() : "UNKNOWN");
+        
+        report.setMeetingStartDateTime(toUtcString(google.getStartTime()));
+        report.setMeetingEndDateTime(toUtcString(google.getEndTime()));
+
 
         if (google.getParticipants() != null && !google.getParticipants().isEmpty()) {
             List<UMSAttendanceRecordDto> records = google.getParticipants()
@@ -513,13 +529,27 @@ public class GoogleMeetingMapper {
     }
 
     
+//    private LocalDateTime parseGoogleDateTime(String value) {
+//
+//        if (value == null || value.isBlank()) {
+//            return null;     
+//        }
+//
+//        return OffsetDateTime.parse(value).toLocalDateTime();
+//    }
+//
+    
+    
+    
     private LocalDateTime parseGoogleDateTime(String value) {
 
         if (value == null || value.isBlank()) {
-            return null;     
+            return null;
         }
 
-        return OffsetDateTime.parse(value).toLocalDateTime();
+        return OffsetDateTime.parse(value)
+                .withOffsetSameInstant(ZoneOffset.UTC)
+                .toLocalDateTime();
     }
 
     
